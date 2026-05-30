@@ -32,7 +32,7 @@ The project is designed for workshops, technical talks, and as a clean skeleton 
 ## Architecture
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="ms-agent-app high-level architecture" width="1080">
+  <img src="microsoft_agent_framework_app/docs/architecture.svg" alt="ms-agent-app high-level architecture" width="1080">
 </p>
 
 High-level data flow:
@@ -43,7 +43,7 @@ High-level data flow:
 4. **Phase 3** (`ms_agent_app.eval`) replays a curated dataset through the same Agent, captures trajectories in the OpenAI message schema, and scores them with **Azure AI Evaluation SDK** evaluators using a configurable judge provider (`JUDGE_PROVIDER=azure-openai|openai`).
 5. **Phase 4** (`ms_agent_app.redteam`) wraps the same Agent in a **PyRIT `PromptTarget`**, fires red-team objectives through a `PromptSendingAttack`, and detects refusals with `SelfAskRefusalScorer` driven by the same configurable judge provider.
 
-Full diagram source: [`docs/architecture.svg`](docs/architecture.svg).
+Full diagram source: [`microsoft_agent_framework_app/docs/architecture.svg`](microsoft_agent_framework_app/docs/architecture.svg).
 
 ## Features
 
