@@ -27,32 +27,54 @@ from .target import AgentFrameworkTarget
 
 
 def _require_judge_env(settings: Settings) -> None:
+    if settings.judge_provider == "azure-openai":
+        missing = [
+            name
+            for name, val in (
+                ("AZURE_DEPLOYMENT_NAME", settings.azure_deployment_name),
+                ("AZURE_API_KEY", settings.azure_api_key),
+                ("AZURE_ENDPOINT", settings.azure_endpoint),
+            )
+            if not val
+        ]
+        if missing:
+            raise SystemExit(
+                "Missing env vars for PyRIT judge model (azure-openai): " + ", ".join(missing)
+            )
+        return
+
     missing = [
         name
         for name, val in (
-            ("AZURE_DEPLOYMENT_NAME", settings.azure_deployment_name),
-            ("AZURE_API_KEY", settings.azure_api_key),
-            ("AZURE_ENDPOINT", settings.azure_endpoint),
+            ("JUDGE_OPENAI_API_KEY or OPENAI_API_KEY", settings.judge_openai_api_key or settings.openai_api_key),
+            (
+                "JUDGE_OPENAI_MODEL or OPENAI_CHAT_MODEL or OPENAI_MODEL",
+                settings.judge_openai_model or settings.openai_chat_model or settings.openai_model,
+            ),
         )
         if not val
     ]
     if missing:
-        raise SystemExit("Missing env vars for PyRIT judge model: " + ", ".join(missing))
+        raise SystemExit("Missing env vars for PyRIT judge model (openai): " + ", ".join(missing))
 
 
 def _build_judge_target(settings: Settings) -> Any:
-    """Construct an `OpenAIChatTarget` pointed at the Azure OpenAI judge deployment.
-
-    Uses the *same* AOAI deployment configured for the Phase 3 Azure AI Evaluation
-    SDK so a single set of judge credentials covers both layers.
-    """
+    """Construct an `OpenAIChatTarget` for the configured judge provider."""
     from pyrit.prompt_target import OpenAIChatTarget
 
-    endpoint = (settings.azure_endpoint or "").rstrip("/") + "/openai/v1"
+    if settings.judge_provider == "azure-openai":
+        endpoint = (settings.azure_endpoint or "").rstrip("/") + "/openai/v1"
+        api_key = settings.azure_api_key
+        model = settings.azure_deployment_name
+    else:
+        endpoint = (settings.judge_openai_base_url or settings.openai_base_url or "https://api.openai.com/v1").rstrip("/")
+        api_key = settings.judge_openai_api_key or settings.openai_api_key
+        model = settings.judge_openai_model or settings.openai_chat_model or settings.openai_model
+
     return OpenAIChatTarget(
         endpoint=endpoint,
-        api_key=settings.azure_api_key,
-        model_name=settings.azure_deployment_name,
+        api_key=api_key,
+        model_name=model,
     )
 
 
@@ -109,6 +131,7 @@ def _serialize_incomplete(case: RedTeamCase, exc: BaseException) -> dict[str, An
 async def _amain() -> int:
     settings = Settings()
     _require_judge_env(settings)
+    print(f"PyRIT judge provider: {settings.judge_provider}")
 
     from pyrit.executor.attack import (
         AttackExecutor,

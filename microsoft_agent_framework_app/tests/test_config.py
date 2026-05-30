@@ -28,3 +28,25 @@ def test_mcp_server_path_resolves_relative(monkeypatch, tmp_path):
     monkeypatch.setenv("MCP_FINANCE_SERVER_PATH", str(server))
     s = Settings()
     assert s.mcp_finance_server_path == server
+
+
+def test_settings_openai_provider_does_not_require_foundry(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_CHAT_MODEL", "gpt-4.1")
+    monkeypatch.delenv("FOUNDRY_PROJECT_ENDPOINT", raising=False)
+    monkeypatch.delenv("FOUNDRY_MODEL_DEPLOYMENT_NAME", raising=False)
+
+    s = Settings(_env_file=None)
+    assert s.model_provider == "openai"
+    assert s.openai_chat_model == "gpt-4.1"
+
+
+def test_settings_openai_provider_requires_key_and_model(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_CHAT_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None)

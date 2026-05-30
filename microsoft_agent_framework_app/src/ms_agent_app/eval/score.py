@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from azure.ai.evaluation import (
+    OpenAIModelConfiguration,
     AzureOpenAIModelConfiguration,
     IntentResolutionEvaluator,
     TaskAdherenceEvaluator,
@@ -20,24 +21,51 @@ from .dataset import CASES, EvalCase
 from .runner import Trajectory
 
 
-def _model_config(settings: Settings) -> AzureOpenAIModelConfiguration:
+def _model_config(settings: Settings) -> AzureOpenAIModelConfiguration | OpenAIModelConfiguration:
+    if settings.judge_provider == "azure-openai":
+        missing = [
+            name
+            for name, val in (
+                ("AZURE_DEPLOYMENT_NAME", settings.azure_deployment_name),
+                ("AZURE_API_KEY", settings.azure_api_key),
+                ("AZURE_ENDPOINT", settings.azure_endpoint),
+            )
+            if not val
+        ]
+        if missing:
+            raise SystemExit(f"Missing env vars for eval judge (azure-openai): {', '.join(missing)}")
+        return AzureOpenAIModelConfiguration(
+            type="azure_openai",
+            azure_endpoint=settings.azure_endpoint,
+            api_key=settings.azure_api_key,
+            azure_deployment=settings.azure_deployment_name,
+            api_version=settings.azure_api_version,
+        )
+
+    api_key = settings.judge_openai_api_key or settings.openai_api_key
+    model = settings.judge_openai_model or settings.openai_chat_model or settings.openai_model
+    base_url = settings.judge_openai_base_url or settings.openai_base_url or "https://api.openai.com/v1"
+
     missing = [
         name
         for name, val in (
-            ("AZURE_DEPLOYMENT_NAME", settings.azure_deployment_name),
-            ("AZURE_API_KEY", settings.azure_api_key),
-            ("AZURE_ENDPOINT", settings.azure_endpoint),
+            ("JUDGE_OPENAI_API_KEY or OPENAI_API_KEY", api_key),
+            ("JUDGE_OPENAI_MODEL or OPENAI_CHAT_MODEL or OPENAI_MODEL", model),
         )
         if not val
     ]
     if missing:
-        raise SystemExit(f"Missing env vars for eval judge: {', '.join(missing)}")
-    return AzureOpenAIModelConfiguration(
-        azure_endpoint=settings.azure_endpoint,
-        api_key=settings.azure_api_key,
-        azure_deployment=settings.azure_deployment_name,
-        api_version=settings.azure_api_version,
-    )
+        raise SystemExit(f"Missing env vars for eval judge (openai): {', '.join(missing)}")
+
+    config: OpenAIModelConfiguration = {
+        "type": "openai",
+        "api_key": api_key,
+        "model": model,
+    }
+    config["base_url"] = base_url
+    if settings.judge_openai_organization:
+        config["organization"] = settings.judge_openai_organization
+    return config
 
 
 def _extract_tool_definitions(mcp_server) -> list[dict[str, Any]]:
@@ -111,6 +139,7 @@ def _score_one(
 async def _amain() -> int:
     settings = Settings()
     model_config = _model_config(settings)
+    print(f"Eval judge provider: {settings.judge_provider}")
 
     intent_eval = IntentResolutionEvaluator(model_config=model_config, threshold=3)
     task_eval = TaskAdherenceEvaluator(model_config=model_config, threshold=0.5)

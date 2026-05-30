@@ -61,17 +61,35 @@ Env vars used across phases (`.env`):
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `FOUNDRY_PROJECT_ENDPOINT` | 1, 2, 3, 4 | Foundry project URL with `/api/projects/<project>` suffix |
-| `FOUNDRY_MODEL_DEPLOYMENT_NAME` | 1, 2, 3, 4 | Chat deployment, e.g. `gpt-4.1` |
+| `MODEL_PROVIDER` | 1, 2, 3, 4 | `foundry` (default), `openai`, `azure-openai`, `anthropic` |
+| `FOUNDRY_PROJECT_ENDPOINT` | 1, 2, 3, 4 (foundry chat provider) | Required when `MODEL_PROVIDER=foundry`; Foundry project URL with `/api/projects/<project>` suffix |
+| `FOUNDRY_MODEL_DEPLOYMENT_NAME` | 1, 2, 3, 4 (foundry chat provider) | Required when `MODEL_PROVIDER=foundry`; chat deployment, e.g. `gpt-4.1` |
+| `OPENAI_API_KEY` | 1, 2, 3, 4 (openai chat provider) | Required when `MODEL_PROVIDER=openai` |
+| `OPENAI_CHAT_MODEL` | 1, 2, 3, 4 (openai chat provider) | Preferred model key |
+| `OPENAI_MODEL` | 1, 2, 3, 4 (openai chat provider) | Fallback model key |
+| `OPENAI_BASE_URL` | 1, 2, 3, 4 (openai chat provider) | Optional custom endpoint |
+| `AZURE_OPENAI_ENDPOINT` | 1, 2, 3, 4 (azure-openai chat provider) | Required when `MODEL_PROVIDER=azure-openai` |
+| `AZURE_OPENAI_CHAT_MODEL` | 1, 2, 3, 4 (azure-openai chat provider) | Preferred model key |
+| `AZURE_OPENAI_MODEL` | 1, 2, 3, 4 (azure-openai chat provider) | Fallback model key |
+| `AZURE_OPENAI_API_KEY` | 1, 2, 3, 4 (azure-openai chat provider) | Optional with Azure identity auth |
+| `AZURE_OPENAI_API_VERSION` | 1, 2, 3, 4 (azure-openai chat provider) | Optional API version override |
+| `ANTHROPIC_API_KEY` | 1, 2, 3, 4 (anthropic chat provider) | Required when `MODEL_PROVIDER=anthropic` |
+| `ANTHROPIC_CHAT_MODEL` | 1, 2, 3, 4 (anthropic chat provider) | Claude model ID |
+| `ANTHROPIC_BASE_URL` | 1, 2, 3, 4 (anthropic chat provider) | Optional custom endpoint |
 | `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` | 1, 2, 3, 4 (auth) | Picked up by `DefaultAzureCredential` |
 | `MCP_FINANCE_SERVER_PATH` | 2 | Absolute path to `adk_financial_mcp_server/server/main.py` |
 | `MCP_FINANCE_PYTHON` | 2 | Interpreter with the MCP server's deps |
-| `AZURE_DEPLOYMENT_NAME` | 3, 4 (judge) | Judge model deployment, e.g. `gpt-4.1-mini` |
-| `AZURE_API_KEY` | 3, 4 (judge) | Azure Cognitive Services key for judge |
-| `AZURE_ENDPOINT` | 3, 4 (judge) | **Account-level** URL — no `/api/projects/...` suffix |
-| `AZURE_API_VERSION` | 3 (judge) | Default `2024-12-01-preview` |
+| `JUDGE_PROVIDER` | 3, 4 (judge) | `azure-openai` (default) or `openai` |
+| `AZURE_DEPLOYMENT_NAME` | 3, 4 (judge, azure-openai) | Judge model deployment, e.g. `gpt-4.1-mini` |
+| `AZURE_API_KEY` | 3, 4 (judge, azure-openai) | Azure Cognitive Services key for judge |
+| `AZURE_ENDPOINT` | 3, 4 (judge, azure-openai) | **Account-level** URL — no `/api/projects/...` suffix |
+| `AZURE_API_VERSION` | 3 (judge, azure-openai) | Default `2024-12-01-preview` |
+| `JUDGE_OPENAI_API_KEY` | 3, 4 (judge, openai) | Optional override; falls back to `OPENAI_API_KEY` |
+| `JUDGE_OPENAI_MODEL` | 3, 4 (judge, openai) | Optional override; falls back to `OPENAI_CHAT_MODEL` / `OPENAI_MODEL` |
+| `JUDGE_OPENAI_BASE_URL` | 3, 4 (judge, openai) | Optional; defaults to `OPENAI_BASE_URL` then `https://api.openai.com/v1` |
+| `JUDGE_OPENAI_ORGANIZATION` | 3, 4 (judge, openai) | Optional organization |
 
-> ⚠ The judge `AZURE_ENDPOINT` and the Foundry `FOUNDRY_PROJECT_ENDPOINT` look almost identical but the judge URL must NOT include `/api/projects/...`. The Foundry path is for the Agent Service; chat-completion calls use the bare account URL.
+> ⚠ When `JUDGE_PROVIDER=azure-openai`, the judge `AZURE_ENDPOINT` and the Foundry `FOUNDRY_PROJECT_ENDPOINT` look almost identical but the judge URL must NOT include `/api/projects/...`. The Foundry path is for the Agent Service; chat-completion calls use the bare account URL.
 
 ---
 
@@ -216,8 +234,25 @@ POSIX convention: `Ctrl-C` returns 128 + SIGINT (2) = 130. This is the kind of d
 ### 4.5 Runtime Model
 
 ```bash
-uv run ms-agent-app                  # Phase 1 (no tools)
-uv run ms-agent-app --with-mcp       # Phase 1 + 2 (tools attached)
+# Phase 1
+uv run ms-agent-app
+uv run ms-agent-app --provider foundry
+uv run ms-agent-app --provider openai
+uv run ms-agent-app --provider azure-openai
+uv run ms-agent-app --provider anthropic
+
+# Phase 2
+uv run ms-agent-app --with-mcp
+uv run ms-agent-app --with-mcp --provider foundry
+uv run ms-agent-app --with-mcp --provider openai
+uv run ms-agent-app --with-mcp --provider azure-openai
+uv run ms-agent-app --with-mcp --provider anthropic
+
+# Phase 3 (provider routing comes from MODEL_PROVIDER + JUDGE_PROVIDER in .env)
+uv run python -m ms_agent_app.eval.score
+
+# Phase 4 (provider routing comes from MODEL_PROVIDER + JUDGE_PROVIDER in .env)
+uv run ms-agent-redteam
 ```
 
 End-to-end flow for one turn:
@@ -356,7 +391,7 @@ src/ms_agent_app/eval/
 
 From `azure.ai.evaluation`:
 
-- `AzureOpenAIModelConfiguration` — judge model config.
+- `AzureOpenAIModelConfiguration` / `OpenAIModelConfiguration` — judge model config (selected by `JUDGE_PROVIDER`).
 - `IntentResolutionEvaluator` — Likert 1–5, scores how well the response addresses the user's intent.
 - `TaskAdherenceEvaluator` — 0.0–1.0, scores whether the response fulfils the user's task.
 - `ToolCallAccuracyEvaluator` — 0.0–5.0, scores tool selection + argument correctness.
@@ -368,16 +403,18 @@ Project-local:
 
 ### 6.3 Classes, Methods, and Patterns to Explain
 
-#### Class: `AzureOpenAIModelConfiguration`
+#### Class: `AzureOpenAIModelConfiguration` / `OpenAIModelConfiguration`
 
 Role:
 
 - Dependency-injected judge configuration. All three evaluators receive the same instance.
-- Carries `azure_endpoint`, `api_key`, `azure_deployment`, `api_version`.
+- Carries provider-specific fields:
+    - Azure OpenAI: `azure_endpoint`, `api_key`, `azure_deployment`, `api_version`
+    - OpenAI: `api_key`, `model`, optional `base_url`, optional `organization`
 
 Presentation tip:
 
-- This is the layer that separates the **agent model** (Foundry chat deployment) from the **judge model** (Azure OpenAI deployment used by the evaluators). They must be different model instances; the same physical model can serve both, but the judge prompt is separate from the agent loop.
+- This is the layer that separates the **agent model** (configured by `MODEL_PROVIDER`) from the **judge model** (configured by `JUDGE_PROVIDER`). They must be different model instances; the same physical model can serve both, but the judge prompt is separate from the agent loop.
 
 #### Evaluator classes — shared call signature
 
@@ -493,7 +530,7 @@ The `clarification` case is the one most teams forget. It's the only one that ca
 
 The script has four phases:
 
-1. **`_model_config(settings)`** — validates the three judge env vars (`AZURE_DEPLOYMENT_NAME`, `AZURE_API_KEY`, `AZURE_ENDPOINT`), constructs `AzureOpenAIModelConfiguration`.
+1. **`_model_config(settings)`** — validates judge env vars based on `JUDGE_PROVIDER`, constructs `AzureOpenAIModelConfiguration` or `OpenAIModelConfiguration`.
 2. **`_collect_trajectories(settings, cases)`** — opens the MCP server once, captures `tool_definitions` from it, then opens the agent once, runs every case in sequence, returns the trajectories and the captured definitions.
 3. **`_score_one(traj, case, intent_eval, task_eval, tool_eval, tool_definitions)`** — runs the three evaluators. Only calls `ToolCallAccuracyEvaluator` if the trajectory actually contains tool calls.
 4. **Persistence** — writes `.eval_outputs/results.json` with one record per case.
@@ -539,7 +576,7 @@ Use this pattern when:
 
 ### 6.9 Two-Minute Speaking Script (Phase 3)
 
-"Phase 3 is evaluator-driven. Three callable classes — `IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `ToolCallAccuracyEvaluator` — instantiated with one shared `AzureOpenAIModelConfiguration` that points at our gpt-4.1-mini deployment.
+"Phase 3 is evaluator-driven. Three callable classes — `IntentResolutionEvaluator`, `TaskAdherenceEvaluator`, `ToolCallAccuracyEvaluator` — instantiated with one shared judge config selected by `JUDGE_PROVIDER` (`AzureOpenAIModelConfiguration` or `OpenAIModelConfiguration`).
 
 The non-trivial work is in `runner.py`: translating the Agent Framework's `AgentResponse.messages` into the OpenAI message schema the evaluators expect. `_extract_tool_calls` walks the messages, pulls `(call_id, name, arguments)` triples off assistant content blocks, JSON-parses the arguments string. `_extract_tool_definitions` in `score.py` calls `FunctionTool.parameters()` — it's a method, not an attribute, which is the single biggest trap.
 
@@ -679,7 +716,7 @@ Notes:
 
 - The `/openai/v1` suffix is what makes the Azure resource look like an OpenAI-compatible v1 API to `OpenAIChatTarget`.
 - `model_name` must be the **deployment name** (`gpt-4.1-mini`), not the underlying model id.
-- Same Azure resource serves both Phase 3 and Phase 4 judges. One key, one endpoint.
+- Phase 3 and Phase 4 share the same judge-provider routing through `JUDGE_PROVIDER`.
 
 ### 7.5 Section-by-Section
 
@@ -758,7 +795,7 @@ Use this pattern when:
 
 "Phase 4 is the attack-defense layer. We wrap the same agent we just quality-evaluated in a 20-line PyRIT `PromptTarget` adapter — that's the only PyRIT-specific code we own. Everything else is dataset, attack strategy, executor, scorer.
 
-The attack is `PromptSendingAttack` driven by `AttackExecutor` with `return_partial_on_failure=True` so a single Azure-content-filter 400 doesn't abort the whole run. The scorer is `SelfAskRefusalScorer` against the same Azure OpenAI judge we used in Phase 3.
+The attack is `PromptSendingAttack` driven by `AttackExecutor` with `return_partial_on_failure=True` so a single content-filter 400 doesn't abort the whole run. The scorer is `SelfAskRefusalScorer` against the same judge-provider routing we used in Phase 3.
 
 The crucial nuance is outcome semantics. `AttackOutcome.SUCCESS` means the scorer's objective — detecting a refusal — was met. So `SUCCESS` is **the agent defended**, `FAILURE` is **the agent complied**. Our serializer translates this into a clean `refusal_detected` boolean.
 
@@ -772,7 +809,7 @@ The single most interesting finding is `prompt-injection-tool`: the scorer repor
 |---|---|---|---|---|
 | **Primary class** | `Agent` | `MCPStdioTool` | `IntentResolutionEvaluator` etc. | `PromptSendingAttack` |
 | **Lifecycle** | `async with build_chat_agent(...)` | `async with open_finance_mcp_tool(...)` | callable evaluators | `AttackExecutor.execute_attack_async(...)` |
-| **External dependency** | Foundry chat endpoint | sibling MCP server subprocess | Azure OpenAI judge | Azure OpenAI judge |
+| **External dependency** | provider-routed chat endpoint | sibling MCP server subprocess | provider-routed judge | provider-routed judge |
 | **Output** | text → stdout | tool result → stdin/stdout | `.eval_outputs/results.json` | `.pyrit_outputs/results.json` |
 | **Failure mode of interest** | auth chain failure | subprocess crash | silent missing evaluator | false-negative refusal |
 | **Cost per run** | ~$0.001 | ~$0.001 | ~$0.05 | ~$0.03 |

@@ -63,7 +63,7 @@ Most production incidents land in the gap between the third and fourth bullet: t
 
 ### The application in one diagram
 
-Pull up `docs/architecture.svg`. Walk top-to-bottom: developer → CLI → Agent core (blue), which talks to Foundry on the right; with `--with-mcp` the Agent also opens the green MCP subprocess below; both the Eval (orange) and PyRIT (red) phases attach to the *same* Agent and route their judge calls to the same Azure OpenAI deployment. One `.env`, one set of credentials, four phases.
+Pull up `docs/architecture.svg`. Walk top-to-bottom: developer → CLI → Agent core (blue), which talks to Foundry on the right; with `--with-mcp` the Agent also opens the green MCP subprocess below; both the Eval (orange) and PyRIT (red) phases attach to the *same* Agent and route their judge calls through `JUDGE_PROVIDER` (`azure-openai` or `openai`). One `.env`, one config surface, four phases.
 
 ---
 
@@ -105,6 +105,10 @@ Walk through each:
 
 ```bash
 uv run ms-agent-app
+# Provider override examples:
+# uv run ms-agent-app --provider openai
+# uv run ms-agent-app --provider azure-openai
+# uv run ms-agent-app --provider anthropic
 > What is the Microsoft Agent Framework in one sentence?
 > exit
 ```
@@ -153,8 +157,15 @@ When `--with-mcp` is on, the Agent Framework calls `MCPStdioTool.list_tools()` o
 
 ```bash
 uv run ms-agent-app --with-mcp
+# Provider override example:
+# uv run ms-agent-app --with-mcp --provider openai
 > Run a dual moving average backtest on AAPL for the last 2 years.
 ```
+
+For demo consistency across all four phases:
+
+- Phase 1 and 2: choose agent provider with `--provider` (or `MODEL_PROVIDER` in `.env`).
+- Phase 3 and 4: choose agent provider with `MODEL_PROVIDER` and judge provider with `JUDGE_PROVIDER`.
 
 In the trace you'll see (top to bottom):
 
@@ -190,7 +201,7 @@ Three reasons.
 | `TaskAdherenceEvaluator` | Does the response actually do what the user asked? | 0.0–1.0 (we threshold at 0.5) |
 | `ToolCallAccuracyEvaluator` | Was the right tool selected with the right arguments? | 0.0–5.0 passing rate |
 
-All three are **LLM-as-judge** with structured rubrics. We point them at our Azure OpenAI `gpt-4.1-mini` deployment via `AzureOpenAIModelConfiguration`. **Crucially: judge model ≠ agent model** so the judge isn't grading its own output.
+All three are **LLM-as-judge** with structured rubrics. We point them at a configurable judge model: `AzureOpenAIModelConfiguration` when `JUDGE_PROVIDER=azure-openai`, or `OpenAIModelConfiguration` when `JUDGE_PROVIDER=openai`. **Crucially: judge model ≠ agent model** so the judge isn't grading its own output.
 
 > 💡 **Speaker Note:** The Anthropic guidance ("isolate each evaluation dimension into a separate judge call — don't ask one prompt to score correctness, completeness, and tone simultaneously") is exactly the design Microsoft adopted here. Each evaluator is a separate judge invocation; you get three independent scores, not one mushy composite.
 
@@ -267,8 +278,8 @@ This is structurally different from quality eval. Quality eval asks "did the age
 | Target | `PromptTarget` (we subclass) | `AgentFrameworkTarget` wraps `agent.run(prompt)` |
 | Attack | `PromptSendingAttack` | Single-turn delivery of one attack objective per case |
 | Executor | `AttackExecutor` | Runs N attacks in parallel with bounded concurrency |
-| Scorer | `SelfAskRefusalScorer` | LLM-as-judge over Azure OpenAI judging "did this look like a refusal?" |
-| Judge | `OpenAIChatTarget` | The judge model — same gpt-4.1-mini we used for Phase 3 |
+| Scorer | `SelfAskRefusalScorer` | LLM-as-judge scoring "did this look like a refusal?" |
+| Judge | `OpenAIChatTarget` | Judge target built from `JUDGE_PROVIDER` (Azure OpenAI or OpenAI) |
 
 > 💡 **Speaker Note:** PyRIT renamed several abstractions in v0.13 — `PromptSendingOrchestrator` → `PromptSendingAttack`, `PromptRequestResponse` → `Message`, `PromptChatTarget` was deprecated in favor of subclassing `PromptTarget` directly. **Tutorials from 2024–2025 don't run unchanged.** We hit this exact wall during development and rewrote the target adapter against the live source.
 
@@ -331,7 +342,7 @@ If we had another 12 minutes we'd add:
 
 **The four-phase pattern is reusable.** Any agent project benefits from the same skeleton: bootstrap → ground with tools → quality eval → red-team. Each phase is ~150–200 lines of glue and is independently testable. Don't try to build all four at once; ship Phase 1, then attach the others one at a time.
 
-**One `.env`, one credential, four phases.** The same service principal (or `az login`) drives Foundry inference, MCP subprocess launching, the eval judge model, and the PyRIT judge model. Resist the urge to introduce per-phase credential silos.
+**One `.env`, one configuration surface, four phases.** The same app config drives Foundry inference, MCP subprocess launching, the eval judge model, and the PyRIT judge model. Resist the urge to introduce per-phase configuration silos.
 
 **Lazy imports cut your install surface in half.** `pyrit` brings ~150 MB of `transformers` baggage. Putting it behind `[project.optional-dependencies] redteam = [...]` means the base install stays small. Same trick with MCP if you ever ship a "chat-only" build.
 

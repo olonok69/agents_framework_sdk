@@ -40,8 +40,8 @@ High-level data flow:
 1. **Developer** runs the CLI (`ms-agent-app`); `cli.py` loads `.env` via `pydantic-settings` (`config.py`) and builds an Agent (`agent_factory.build_chat_agent`).
 2. The Agent calls **Azure AI Foundry** through `FoundryChatClient`, authenticated with `AzureCliCredential` (i.e. your `az login` token).
 3. With `--with-mcp`, `mcp_finance.open_finance_mcp_tool` spawns the sibling **FastMCP "finance tools" server** as a stdio subprocess; its tools become callable by the Agent in the same `agent.run(...)` loop.
-4. **Phase 3** (`ms_agent_app.eval`) replays a curated dataset through the same Agent, captures trajectories in the OpenAI message schema, and scores them with **Azure AI Evaluation SDK** evaluators using an Azure OpenAI judge deployment.
-5. **Phase 4** (`ms_agent_app.redteam`) wraps the same Agent in a **PyRIT `PromptTarget`**, fires red-team objectives through a `PromptSendingAttack`, and detects refusals with `SelfAskRefusalScorer` driven by the same Azure OpenAI judge.
+4. **Phase 3** (`ms_agent_app.eval`) replays a curated dataset through the same Agent, captures trajectories in the OpenAI message schema, and scores them with **Azure AI Evaluation SDK** evaluators using a configurable judge provider (`JUDGE_PROVIDER=azure-openai|openai`).
+5. **Phase 4** (`ms_agent_app.redteam`) wraps the same Agent in a **PyRIT `PromptTarget`**, fires red-team objectives through a `PromptSendingAttack`, and detects refusals with `SelfAskRefusalScorer` driven by the same configurable judge provider.
 
 Full diagram source: [`docs/architecture.svg`](docs/architecture.svg).
 
@@ -49,7 +49,7 @@ Full diagram source: [`docs/architecture.svg`](docs/architecture.svg).
 
 - **Async-first Agent Framework wiring** — minimal `FoundryChatClient` factory plus an `Agent` factory that accepts an optional MCP toolbelt.
 - **Lazy MCP subprocess management** — `MCPStdioTool` is opened in an `async with` block; the finance server only runs when `--with-mcp` is set.
-- **Single `.env` for four layers** — Foundry, MCP server path, AOAI judge, and PyRIT judge share one configuration surface, validated by `pydantic-settings`.
+- **Single `.env` for four layers** — model provider, MCP server path, evaluation judge, and PyRIT judge share one configuration surface, validated by `pydantic-settings`.
 - **Replayable evaluation harness** — `Trajectory.record(agent)` captures `(query, response, tool_calls)` in the OpenAI message-schema shape the Azure AI Evaluation SDK expects.
 - **Red-team script** — Phase 4 ships a small dataset of jailbreak / prompt-injection / harmful-finance / system-prompt-extraction probes that you can run with one command.
 - **Optional heavy deps** — `pyrit` is an extras group (`uv sync --extra redteam`) so the base install stays small.
@@ -133,17 +133,35 @@ cp .env.example .env
 
 | Variable | Used by | Notes |
 |---|---|---|
+| `MODEL_PROVIDER` | Phase 1, 2, 3, 4 chat runtime | One of `foundry`, `openai`, `azure-openai`, `anthropic` (default `foundry`) |
 | `FOUNDRY_PROJECT_ENDPOINT` | Phase 1, 2, 3, 4 — Foundry chat client | e.g. `https://<resource>.services.ai.azure.com/api/projects/<project>` |
 | `FOUNDRY_MODEL_DEPLOYMENT_NAME` | Phase 1, 2, 3, 4 — Foundry chat client | Chat deployment name, e.g. `gpt-4.1` |
 | `AZURE_TENANT_ID` | Optional — `AzureCliCredential` | Only when `az login` has multiple tenants |
+| `OPENAI_API_KEY` | Phase 1, 2, 3, 4 — OpenAI chat provider | Required when `MODEL_PROVIDER=openai` |
+| `OPENAI_CHAT_MODEL` | Phase 1, 2, 3, 4 — OpenAI chat provider | Preferred deployment for `OpenAIChatClient` |
+| `OPENAI_MODEL` | Optional fallback for OpenAI chat provider | Used when `OPENAI_CHAT_MODEL` is unset |
+| `OPENAI_BASE_URL` | Optional — OpenAI chat provider | Custom OpenAI-compatible base URL |
+| `AZURE_OPENAI_ENDPOINT` | Phase 1, 2, 3, 4 — Azure OpenAI chat provider | Required when `MODEL_PROVIDER=azure-openai` |
+| `AZURE_OPENAI_CHAT_MODEL` | Phase 1, 2, 3, 4 — Azure OpenAI chat provider | Preferred deployment for `OpenAIChatClient` |
+| `AZURE_OPENAI_MODEL` | Optional fallback for Azure OpenAI chat provider | Used when `AZURE_OPENAI_CHAT_MODEL` is unset |
+| `AZURE_OPENAI_API_KEY` | Optional — Azure OpenAI chat provider | Not required when using Azure identity auth |
+| `AZURE_OPENAI_API_VERSION` | Optional — Azure OpenAI chat provider | API version override for OpenAI client |
+| `ANTHROPIC_API_KEY` | Phase 1, 2, 3, 4 — Anthropic chat provider | Required when `MODEL_PROVIDER=anthropic` |
+| `ANTHROPIC_CHAT_MODEL` | Phase 1, 2, 3, 4 — Anthropic chat provider | Claude model ID |
+| `ANTHROPIC_BASE_URL` | Optional — Anthropic chat provider | Custom Anthropic-compatible base URL |
 | `MCP_FINANCE_SERVER_PATH` | Phase 2 | Absolute or relative path to `adk_financial_mcp_server/server/main.py` |
 | `MCP_FINANCE_PYTHON` | Phase 2 | Interpreter that has the finance server's deps installed |
-| `AZURE_DEPLOYMENT_NAME` | Phase 3 judge **and** Phase 4 PyRIT judge | Azure OpenAI deployment name (e.g. `gpt-4o`) |
-| `AZURE_API_KEY` | Phase 3 judge **and** Phase 4 PyRIT judge | Azure OpenAI key |
-| `AZURE_ENDPOINT` | Phase 3 judge **and** Phase 4 PyRIT judge | `https://<aoai>.cognitiveservices.azure.com/` |
-| `AZURE_API_VERSION` | Phase 3 judge | Default `2024-12-01-preview` |
+| `JUDGE_PROVIDER` | Phase 3 judge **and** Phase 4 PyRIT judge | `azure-openai` (default) or `openai` |
+| `AZURE_DEPLOYMENT_NAME` | Judge when `JUDGE_PROVIDER=azure-openai` | Azure OpenAI deployment name (e.g. `gpt-4o`) |
+| `AZURE_API_KEY` | Judge when `JUDGE_PROVIDER=azure-openai` | Azure OpenAI key |
+| `AZURE_ENDPOINT` | Judge when `JUDGE_PROVIDER=azure-openai` | `https://<aoai>.cognitiveservices.azure.com/` |
+| `AZURE_API_VERSION` | Judge when `JUDGE_PROVIDER=azure-openai` | Default `2024-12-01-preview` |
+| `JUDGE_OPENAI_API_KEY` | Judge when `JUDGE_PROVIDER=openai` | Optional override; falls back to `OPENAI_API_KEY` |
+| `JUDGE_OPENAI_MODEL` | Judge when `JUDGE_PROVIDER=openai` | Optional override; falls back to `OPENAI_CHAT_MODEL` / `OPENAI_MODEL` |
+| `JUDGE_OPENAI_BASE_URL` | Optional OpenAI judge base URL | Defaults to `OPENAI_BASE_URL` then `https://api.openai.com/v1` |
+| `JUDGE_OPENAI_ORGANIZATION` | Optional OpenAI judge organization | Passed to `OpenAIModelConfiguration` |
 
-`pydantic-settings` validates the file and surfaces friendly errors if Phase 1 / 2 vars are missing. The judge vars (`AZURE_*`) are only checked when the Phase 3 / Phase 4 scripts are actually executed.
+`pydantic-settings` validates the file and surfaces friendly errors if Phase 1 / 2 vars are missing. Judge vars are validated lazily when Phase 3 / Phase 4 scripts run based on `JUDGE_PROVIDER`.
 
 ## How to Run
 
@@ -151,15 +169,40 @@ cp .env.example .env
 # Phase 1 — chat-only agent (no tools)
 uv run ms-agent-app
 
+# Phase 1 provider options via CLI override
+uv run ms-agent-app --provider foundry
+uv run ms-agent-app --provider openai
+uv run ms-agent-app --provider azure-openai
+uv run ms-agent-app --provider anthropic
+
 # Phase 2 — agent + finance MCP tools (lazy stdio subprocess)
 uv run ms-agent-app --with-mcp
+uv run ms-agent-app --with-mcp --provider foundry
+uv run ms-agent-app --with-mcp --provider openai
+uv run ms-agent-app --with-mcp --provider azure-openai
+uv run ms-agent-app --with-mcp --provider anthropic
 
 # Phase 3 — Azure AI Evaluation SDK pass over the curated dataset
+# Agent model provider comes from MODEL_PROVIDER in .env
+# Judge provider comes from JUDGE_PROVIDER in .env
 uv run python -m ms_agent_app.eval.score
 
 # Phase 4 — PyRIT red-team pass over the curated attack dataset
+# Agent model provider comes from MODEL_PROVIDER in .env
+# Judge provider comes from JUDGE_PROVIDER in .env
 uv run ms-agent-redteam
 ```
+
+### Demo matrix for all 4 phases
+
+Use these provider settings before running the command for each phase:
+
+| Phase | Command | Agent provider options | Judge provider options |
+|---|---|---|---|
+| 1 | `uv run ms-agent-app [--provider ...]` | `foundry`, `openai`, `azure-openai`, `anthropic` (via `--provider` or `MODEL_PROVIDER`) | N/A |
+| 2 | `uv run ms-agent-app --with-mcp [--provider ...]` | `foundry`, `openai`, `azure-openai`, `anthropic` (via `--provider` or `MODEL_PROVIDER`) | N/A |
+| 3 | `uv run python -m ms_agent_app.eval.score` | `foundry`, `openai`, `azure-openai`, `anthropic` (from `MODEL_PROVIDER`) | `azure-openai` or `openai` (from `JUDGE_PROVIDER`) |
+| 4 | `uv run ms-agent-redteam` | `foundry`, `openai`, `azure-openai`, `anthropic` (from `MODEL_PROVIDER`) | `azure-openai` or `openai` (from `JUDGE_PROVIDER`) |
 
 ### Manual smoke test (Phase 2)
 
@@ -179,7 +222,9 @@ The MCP server subprocess is started lazily by `MCPStdioTool` and exits when the
 
 `ms_agent_app.eval.score` follows the same shape as [`evaluation/03_azure_ai_eval_agents.py`](../evaluation/03_azure_ai_eval_agents.py) from the sibling evaluation project:
 
-1. `Settings()` loads the judge model config (`AzureOpenAIModelConfiguration`).
+1. `Settings()` loads the judge model config from `JUDGE_PROVIDER`:
+    - `azure-openai` -> `AzureOpenAIModelConfiguration`
+    - `openai` -> `OpenAIModelConfiguration`
 2. For each `EvalCase` in `eval/dataset.py`, `Trajectory.record(agent, tools=mcp_server)` runs the prompt and captures the response + any tool calls in the OpenAI message-schema shape:
    ```python
    {"role": "user", "content": [{"type": "text", "text": "..."}]}
@@ -234,7 +279,9 @@ Curated dataset (`eval/dataset.py`):
    ```
    PyRIT calls `send_prompt_async` (which is `@final`); we only override the single abstract coroutine. Memory + history is handled by the base class.
 
-3. **Judge model** — `SelfAskRefusalScorer` needs its own LLM judge. We point an `OpenAIChatTarget` at the same Azure OpenAI deployment used by the Phase 3 evaluators, so one set of credentials covers both layers.
+3. **Judge model** — `SelfAskRefusalScorer` needs its own LLM judge. We point an `OpenAIChatTarget` using `JUDGE_PROVIDER` routing:
+    - `azure-openai`: uses `AZURE_ENDPOINT + /openai/v1`, `AZURE_API_KEY`, `AZURE_DEPLOYMENT_NAME`
+    - `openai`: uses `JUDGE_OPENAI_*` (or falls back to `OPENAI_*`)
 
 4. **Attack** — `PromptSendingAttack` + `AttackExecutor` send the dataset's objectives through the target with bounded concurrency:
    ```python
@@ -306,7 +353,7 @@ uv run ruff format --check .
 | Issue | Fix |
 |-------|-----|
 | `chmod ... .git/config.lock: Operation not permitted` (WSL) | Export `UV_PROJECT_ENVIRONMENT=/home/$USER/.venvs/ms-agent-app` so the venv lives on ext4. |
-| `Missing env vars for eval judge: AZURE_API_KEY` | Fill the Azure OpenAI judge vars in `.env`. They're only validated when Phase 3 / 4 runs. |
+| `Missing env vars for eval judge ...` | Fill judge vars in `.env` according to `JUDGE_PROVIDER`. |
 | `ModuleNotFoundError: pyrit` when running `ms-agent-redteam` | Re-run `uv sync --extra redteam`. |
 | `MCP server script not found at ...` | Check `MCP_FINANCE_SERVER_PATH` is correct and the sibling project is cloned. |
 | Foundry calls return `DefaultAzureCredential failed ...` | Run `az login`. If you have multiple tenants, also set `AZURE_TENANT_ID`. |
@@ -316,7 +363,9 @@ uv run ruff format --check .
 
 ## Operational Tips
 
-- Phase 3 and Phase 4 share the **same Azure OpenAI deployment** as a judge. One key, one endpoint, two evaluation layers.
+- Phase 3 and Phase 4 share the **same judge-provider routing** via `JUDGE_PROVIDER`.
+- For `JUDGE_PROVIDER=openai`, evaluation uses `JUDGE_OPENAI_*` (with fallback to `OPENAI_*`).
+- For `JUDGE_PROVIDER=azure-openai`, evaluation/red-team use `AZURE_*` judge variables.
 - Keep the curated datasets (`eval/dataset.py`, `redteam/dataset.py`) short and high-signal — these scripts are demos, not coverage suites. Grow them incrementally.
 - The MCP subprocess is spawned per Phase-3 run; expect cold-start latency on the first prompt. Phase 4 does **not** open the MCP server (red-team prompts attack the agent's chat behavior, not its tools).
 - PyRIT is moving fast (v0.13 in 2026); pin the version in `pyproject.toml` before adding more scripts on top of it.

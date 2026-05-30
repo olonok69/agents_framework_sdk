@@ -34,3 +34,21 @@ def test_build_chat_agent_uses_foundry_client(monkeypatch):
         assert agent_kwargs["instructions"] == "hi"
         assert agent_kwargs["client"] is foundry_instance
         assert agent is agent_mock.return_value
+
+
+def test_build_chat_agent_allows_provider_override(monkeypatch):
+    settings = _stub_settings(monkeypatch)
+    with (
+        patch("ms_agent_app.agent_factory.build_chat_client") as client_builder,
+        patch("ms_agent_app.agent_factory.Agent") as agent_mock,
+    ):
+        client_instance = MagicMock()
+        client_builder.return_value = client_instance
+        agent_mock.return_value = MagicMock()
+
+        build_chat_agent(settings, provider="openai", instructions="hi")
+
+        client_builder.assert_called_once_with(settings, provider="openai")
+        _, agent_kwargs = agent_mock.call_args
+        assert agent_kwargs["client"] is client_instance
+        assert agent_kwargs["name"] == "OpenaiAgent"

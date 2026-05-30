@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "agent-framework>=1.4.0",
+    "agent-framework-anthropic>=1.0.0b260521",
     "agent-framework-foundry>=1.4.0",
+    "agent-framework-openai>=1.0.0b260521",
     "azure-ai-evaluation>=1.0.0",
     "azure-identity>=1.26.0b2",
     "mcp>=1.27.1",
