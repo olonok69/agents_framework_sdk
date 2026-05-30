@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register - MCP Stock Analyzer</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f7fb; margin: 0; }
+    .box { max-width: 480px; margin: 60px auto; background: #fff; border: 1px solid #e3e8f0; border-radius: 10px; padding: 20px; }
+    button { margin-top: 12px; padding: 10px 14px; background: #265cff; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    a { color: #265cff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Create Account</h2>
+    {% if success %}
+      <p>Account created. <a href="/">Go to dashboard</a></p>
+    {% elif already %}
+      <p>You are already logged in. <a href="/">Go to dashboard</a></p>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Register</button>
+      </form>
+      <p><a href="/login/">Already have an account? Login</a></p>
+    {% endif %}
+  </div>
+</body>
+</html>

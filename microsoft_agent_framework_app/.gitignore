@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+uv.lock.bak
+.eval_outputs/
+.pyrit_outputs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+CLAUDE.md

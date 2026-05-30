@@ -1,0 +1,14 @@
+yfinance
+mcp>=0.1.0
+openai>=1.0.0
+pandas>=2.0.0,<3
+numpy>=1.24.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+plotly>=5.0.0
+fastapi>=0.110.0
+uvicorn>=0.30.0
+django>=5.1.0
+google-adk[extensions]>=0.7.0
+google-genai>=1.0.0
+litellm>=1.75.5

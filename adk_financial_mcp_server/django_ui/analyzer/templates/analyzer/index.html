@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Stock Analyzer (Django)</title>
+  <style>
+    :root {
+      --bg-color: {{ theme.bg_color|default:'#f5f7fb' }};
+      --surface-color: {{ theme.surface_color|default:'#ffffff' }};
+      --text-color: {{ theme.text_color|default:'#1c2636' }};
+      --accent-color: {{ theme.accent_color|default:'#265cff' }};
+      --primary-button-text-color: {{ theme.primary_button_text_color|default:'#ffffff' }};
+      --secondary-button-text-color: {{ theme.secondary_button_text_color|default:'#ffffff' }};
+    }
+    body { font-family: Arial, sans-serif; margin: 0; background: var(--bg-color); color: var(--text-color); }
+    .layout { display: grid; grid-template-columns: 340px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--surface-color); border-right: 1px solid #e3e8f0; padding: 20px; }
+    .main { padding: 20px; }
+    .title { margin: 0 0 8px 0; }
+    .subtitle { margin: 0 0 20px 0; color: #5c677a; }
+    .card { background: var(--surface-color); border: 1px solid #e3e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .card h3 { margin-top: 0; }
+    .tabs { margin-bottom: 12px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display: block; font-weight: 600; margin: 10px 0 6px; }
+    input, select, textarea { width: 100%; padding: 8px; border: 1px solid #cfd8e6; border-radius: 6px; box-sizing: border-box; }
+    textarea { min-height: 90px; }
+    button { background: var(--accent-color); color: var(--primary-button-text-color); border: none; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
+    button.secondary { background: #6b7280; color: var(--secondary-button-text-color); }
+    .error { color: #b42318; white-space: pre-wrap; }
+    .report { white-space: normal; background: #f8fafc; border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px; max-height: 520px; overflow: auto; }
+    .history-item { border-top: 1px solid #e3e8f0; padding-top: 10px; margin-top: 10px; }
+    .meta { color: #667085; font-size: 12px; }
+    .auth-links { margin-top: 10px; font-size: 14px; }
+    .auth-links a { color: var(--accent-color); text-decoration: none; margin-right: 8px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h2 class="title">⚙️ Settings</h2>
+    <p class="subtitle">Configure backend and model defaults</p>
+    <div class="auth-links">
+      {% if request.user.is_authenticated %}
+        Signed in as <strong>{{ request.user.username }}</strong><br>
+        <a href="{% url 'logout' %}">Logout</a>
+      {% else %}
+        <a href="{% url 'login' %}">Login</a>
+        <a href="{% url 'register' %}">Register</a>
+      {% endif %}
+    </div>
+    <hr>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_settings">
+      <label>API URL</label>
+      <input name="api_url" value="{{ settings.api_url }}">
+
+      <label>Model ID</label>
+      <input name="model_id" value="{{ settings.model_id }}">
+
+      <label>Model Provider</label>
+      <select name="model_provider">
+        <option value="openai" {% if settings.model_provider == 'openai' %}selected{% endif %}>openai</option>
+        <option value="google" {% if settings.model_provider == 'google' %}selected{% endif %}>google</option>
+      </select>
+
+      <label>OpenAI API Key (optional override)</label>
+      <input type="password" name="openai_api_key" value="{{ settings.openai_api_key }}">
+      <br><br>
+      <button type="submit">Save Settings</button>
+    </form>
+
+    <hr>
+    <h3>🎨 Look & Feel</h3>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="save_theme">
+      <label>Background Color</label>
+      <input type="color" name="bg_color" value="{{ theme.bg_color }}">
+      <label>Panel Color</label>
+      <input type="color" name="surface_color" value="{{ theme.surface_color }}">
+      <label>Text Color</label>
+      <input type="color" name="text_color" value="{{ theme.text_color }}">
+      <label>Accent Color</label>
+      <input type="color" name="accent_color" value="{{ theme.accent_color }}">
+      <label>Primary Button Text Color</label>
+      <input type="color" name="primary_button_text_color" value="{{ theme.primary_button_text_color|default:'#ffffff' }}">
+      <label>Secondary Button Text Color</label>
+      <input type="color" name="secondary_button_text_color" value="{{ theme.secondary_button_text_color|default:'#ffffff' }}">
+      <br><br>
+      <button type="submit">Apply Theme</button>
+    </form>
+  </aside>
+
+  <main class="main">
+    <h1 class="title">📊 MCP Stock Analyzer</h1>
+    <p class="subtitle">Django UI with Streamlit-like analysis sections</p>
+
+    <div class="card">
+      <div class="tabs">
+        <label for="analysis-select">Analysis Type</label>
+        <select id="analysis-select">
+          <option value="technical">🔎 Technical (Analysis)</option>
+          <option value="scanner">🔎 Scanner (Analysis)</option>
+          <option value="fundamental">🔎 Fundamental (Analysis)</option>
+          <option value="multisector">🔎 Multi-Sector (Analysis)</option>
+          <option value="combined">🔎 Combined (Analysis)</option>
+          <option value="overnight_gaps">🔎 Overnight Gaps (Analysis)</option>
+          <option value="earnings_momentum">🔎 Earnings Momentum (Analysis)</option>
+          <option value="bollinger_breakout">🧪 Bollinger Breakout (Strategy)</option>
+          <option value="gap_fade">🧪 Gap Fade (Strategy)</option>
+          <option value="multi_timeframe">🧪 Multi-Timeframe (Strategy)</option>
+          <option value="pairs_trading">🧪 Pairs Trading (Strategy)</option>
+          <option value="statistical_arbitrage">🧪 Statistical Arbitrage (Strategy)</option>
+          <option value="vix_term_structure">🧪 VIX Term Structure (Strategy)</option>
+          <option value="volatility_regime">🧪 Volatility Regime (Strategy)</option>
+          <option value="bollinger_zscore_rsi">🧪 Bollinger Z-Score RSI (Strategy)</option>
+          <option value="bollinger_fibonacci">🧪 Bollinger Fibonacci (Strategy)</option>
+          <option value="macd_donchian">🧪 MACD Donchian (Strategy)</option>
+          <option value="dual_moving_average">🧪 Dual Moving Average (Strategy)</option>
+        </select>
+      </div>
+
+      <div id="technical" class="tab-pane">
+        <h3>Technical Analysis</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="technical">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="tech_symbol" value="AAPL"></div>
+            <div><label>Period</label><select name="tech_period"><option>3mo</option><option>6mo</option><option selected>1y</option><option>2y</option><option>5y</option></select></div>
+          </div>
+          <label>Technical Mode</label>
+          <select name="tech_mode">
+            <option value="strategy" selected>Strategy-driven (default)</option>
+            <option value="score">Score-model-driven</option>
+          </select>
+          <label>Risk Profile</label>
+          <select name="tech_risk_profile">
+            <option value="conservative">Conservative</option>
+            <option value="balanced" selected>Balanced (default)</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+          <br><button type="submit">Run Technical Analysis</button>
+        </form>
+      </div>
+
+      <div id="scanner" class="tab-pane">
+        <h3>Market Scanner</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="scanner">
+          <label>Symbols (comma-separated)</label>
+          <input name="scanner_symbols" value="AAPL,MSFT,GOOGL,AMZN">
+          <label>Period</label>
+          <select name="scanner_period"><option>3mo</option><option>6mo</option><option selected>1y</option><option>2y</option></select>
+          <label>Scanner Mode</label>
+          <select name="scanner_mode">
+            <option value="strategy" selected>Strategy-driven (default)</option>
+            <option value="score">Score-model-driven</option>
+          </select>
+          <label>Risk Profile</label>
+          <select name="scanner_risk_profile">
+            <option value="conservative">Conservative</option>
+            <option value="balanced" selected>Balanced (default)</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+          <br><button type="submit">Run Market Scanner</button>
+        </form>
+      </div>
+
+      <div id="fundamental" class="tab-pane">
+        <h3>Fundamental Analysis</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="fundamental">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="fund_symbol" value="MSFT"></div>
+            <div><label>Period</label><select name="fund_period"><option>1y</option><option>2y</option><option selected>3y</option><option>5y</option></select></div>
+          </div>
+          <br><button type="submit">Run Fundamental Analysis</button>
+        </form>
+      </div>
+
+      <div id="multisector" class="tab-pane">
+        <h3>Multi-Sector Analysis</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="multisector">
+          <div class="grid-2">
+            <div>
+              <label>Sector Names (one per line)</label>
+              <textarea name="sector_names">Banking
+Technology
+Clean Energy</textarea>
+            </div>
+            <div>
+              <label>Symbols per Sector (one line per sector)</label>
+              <textarea name="sector_symbols">JPM,BAC,WFC,C,GS
+AAPL,MSFT,GOOGL,NVDA,META
+TSLA,NIO,RIVN,ENPH,SEDG</textarea>
+            </div>
+          </div>
+          <label>Period</label>
+          <select name="multi_period"><option>3mo</option><option>6mo</option><option selected>1y</option><option>2y</option></select>
+          <label>Multi-Sector Mode</label>
+          <select name="multi_mode">
+            <option value="strategy" selected>Strategy-driven (default)</option>
+            <option value="score">Score-model-driven</option>
+          </select>
+          <label>Risk Profile</label>
+          <select name="multi_risk_profile">
+            <option value="conservative">Conservative</option>
+            <option value="balanced" selected>Balanced (default)</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+          <br><button type="submit">Run Multi-Sector Analysis</button>
+        </form>
+      </div>
+
+      <div id="combined" class="tab-pane">
+        <h3>Combined Technical + Fundamental</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="combined">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="combined_symbol" value="TSLA"></div>
+            <div><label>Technical Period</label><select name="combined_tech_period"><option>3mo</option><option>6mo</option><option selected>1y</option><option>2y</option></select></div>
+          </div>
+          <label>Fundamental Period</label>
+          <select name="combined_fund_period"><option>1y</option><option>2y</option><option selected>3y</option><option>5y</option></select>
+          <label>Technical Mode (combined)</label>
+          <select name="combined_tech_mode">
+            <option value="strategy" selected>Strategy-driven (default)</option>
+            <option value="score">Score-model-driven</option>
+          </select>
+          <label>Risk Profile (technical branch)</label>
+          <select name="combined_risk_profile">
+            <option value="conservative">Conservative</option>
+            <option value="balanced" selected>Balanced (default)</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+          <br><button type="submit">Run Combined Analysis</button>
+        </form>
+      </div>
+
+      <div id="overnight_gaps" class="tab-pane">
+        <h3>Overnight Gaps Analysis</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="overnight_gaps">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="gap_symbol" value="AAPL"></div>
+            <div><label>Lookback Days</label><input name="lookback_days" type="number" value="120"></div>
+          </div>
+          <label>Minimum Gap %</label>
+          <input name="min_gap_pct" type="number" step="0.1" value="1.0">
+          <br><button type="submit">Run Overnight Gap Analysis</button>
+        </form>
+      </div>
+
+      <div id="earnings_momentum" class="tab-pane">
+        <h3>Earnings Momentum Analysis</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="earnings_momentum">
+          <label>Symbols (comma-separated)</label>
+          <input name="earnings_symbols" value="AAPL,MSFT,GOOGL,AMZN,NVDA">
+          <div class="grid-2">
+            <div><label>Period</label><select name="earnings_period"><option>3mo</option><option selected>6mo</option><option>1y</option></select></div>
+            <div><label>Volume Window</label><input name="volume_window" type="number" value="20"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Volume Multiplier</label><input name="volume_multiplier" type="number" step="0.1" value="2.0"></div>
+            <div><label>Hold Days</label><input name="hold_days" type="number" value="5"></div>
+          </div>
+          <label>Max Positions</label>
+          <input name="max_positions" type="number" value="3">
+          <br><button type="submit">Run Earnings Momentum</button>
+        </form>
+      </div>
+
+      <div id="bollinger_breakout" class="tab-pane">
+        <h3>Bollinger Breakout (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="bollinger_breakout">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="bb_symbol" value="SPY"></div>
+            <div><label>Period</label><select name="bb_period_window"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>BB Period</label><input name="bb_period" type="number" value="20"></div>
+            <div><label>BB Std Dev</label><input name="bb_std" type="number" step="0.1" value="2.0"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>ATR Period</label><input name="bb_atr_period" type="number" value="14"></div>
+            <div><label>Volume SMA Window</label><input name="bb_volume_window" type="number" value="20"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Volume Multiplier</label><input name="bb_volume_multiplier" type="number" step="0.1" value="1.2"></div>
+            <div><label>Warmup Bars</label><input name="bb_warmup_bars" type="number" value="25"></div>
+          </div>
+          <br><button type="submit">Run Bollinger Breakout Analysis</button>
+        </form>
+      </div>
+
+      <div id="gap_fade" class="tab-pane">
+        <h3>Gap Fade (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="gap_fade">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="gf_symbol" value="SPY"></div>
+            <div><label>Period</label><select name="gf_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Gap Threshold (decimal)</label><input name="gf_gap_threshold" type="number" step="0.001" value="0.02"></div>
+            <div><label>Hold Minutes</label><input name="gf_hold_minutes" type="number" value="120"></div>
+          </div>
+          <label>Position Size (0-1)</label>
+          <input name="gf_position_size" type="number" step="0.1" value="0.8">
+          <br><button type="submit">Run Gap Fade Analysis</button>
+        </form>
+      </div>
+
+      <div id="multi_timeframe" class="tab-pane">
+        <h3>Multi-Timeframe (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="multi_timeframe">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="mt_symbol" value="SPY"></div>
+            <div><label>Period</label><select name="mt_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>SMA Fast</label><input name="mt_sma_fast" type="number" value="50"></div>
+            <div><label>SMA Slow</label><input name="mt_sma_slow" type="number" value="200"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>RSI Period</label><input name="mt_rsi_period" type="number" value="14"></div>
+            <div><label>RSI Oversold</label><input name="mt_rsi_oversold" type="number" step="0.1" value="30"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>RSI Exit</label><input name="mt_rsi_exit" type="number" step="0.1" value="70"></div>
+            <div><label>Warmup Days</label><input name="mt_warmup_days" type="number" value="210"></div>
+          </div>
+          <br><button type="submit">Run Multi-Timeframe Analysis</button>
+        </form>
+      </div>
+
+      <div id="pairs_trading" class="tab-pane">
+        <h3>Pairs Trading (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="pairs_trading">
+          <div class="grid-2">
+            <div><label>Symbol A</label><input name="pt_symbol_a" value="SPY"></div>
+            <div><label>Symbol B</label><input name="pt_symbol_b" value="QQQ"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Period</label><select name="pt_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+            <div><label>Rolling Window</label><input name="pt_window" type="number" value="20"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Entry Threshold (z)</label><input name="pt_entry_threshold" type="number" step="0.1" value="2.0"></div>
+            <div><label>Exit Threshold (|z|)</label><input name="pt_exit_threshold" type="number" step="0.1" value="0.5"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Position Size (0-1)</label><input name="pt_position_size" type="number" step="0.1" value="0.5"></div>
+            <div><label>Warmup Period</label><input name="pt_warmup_period" type="number" value="25"></div>
+          </div>
+          <br><button type="submit">Run Pairs Trading Analysis</button>
+        </form>
+      </div>
+
+      <div id="statistical_arbitrage" class="tab-pane">
+        <h3>Statistical Arbitrage (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="statistical_arbitrage">
+          <label>Symbols (comma-separated, 3+)</label>
+          <input name="sa_symbols" value="AAPL,MSFT,GOOGL">
+          <div class="grid-2">
+            <div><label>Period</label><select name="sa_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+            <div><label>Rolling Window</label><input name="sa_window" type="number" value="20"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Entry Threshold (deviation)</label><input name="sa_entry_threshold" type="number" step="0.1" value="1.5"></div>
+            <div><label>Exit Threshold (|deviation|)</label><input name="sa_exit_threshold" type="number" step="0.1" value="0.3"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Position Size (0-1)</label><input name="sa_position_size" type="number" step="0.1" value="0.3"></div>
+            <div><label>Warmup Period</label><input name="sa_warmup_period" type="number" value="25"></div>
+          </div>
+          <br><button type="submit">Run Statistical Arbitrage Analysis</button>
+        </form>
+      </div>
+
+      <div id="vix_term_structure" class="tab-pane">
+        <h3>VIX Term Structure (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="vix_term_structure">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="vts_symbol" value="SPY"></div>
+            <div><label>Period</label><select name="vts_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Front Vol Window</label><input name="vts_front_window" type="number" value="10"></div>
+            <div><label>Back Vol Window</label><input name="vts_back_window" type="number" value="30"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Contango Threshold</label><input name="vts_contango_threshold" type="number" step="0.01" value="1.05"></div>
+            <div><label>Backwardation Threshold</label><input name="vts_backwardation_threshold" type="number" step="0.01" value="0.95"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Long Position Size</label><input name="vts_long_position_size" type="number" step="0.1" value="0.8"></div>
+            <div><label>Short Position Size</label><input name="vts_short_position_size" type="number" step="0.1" value="-0.5"></div>
+          </div>
+          <label>Warmup Period</label>
+          <input name="vts_warmup_period" type="number" value="35">
+          <br><button type="submit">Run VIX Term Structure Analysis</button>
+        </form>
+      </div>
+
+      <div id="volatility_regime" class="tab-pane">
+        <h3>Volatility Regime (QuantConnect Strategy)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="volatility_regime">
+          <div class="grid-2">
+            <div><label>Period</label><select name="vr_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+            <div><label>Vol Window</label><input name="vr_vol_window" type="number" value="20"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>High Vol Threshold</label><input name="vr_high_vol_threshold" type="number" step="0.1" value="25.0"></div>
+            <div><label>Low Vol Threshold</label><input name="vr_low_vol_threshold" type="number" step="0.1" value="15.0"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>SPY Symbol</label><input name="vr_spy_symbol" value="SPY"></div>
+            <div><label>QQQ Symbol</label><input name="vr_qqq_symbol" value="QQQ"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>ARKK Symbol</label><input name="vr_arkk_symbol" value="ARKK"></div>
+            <div><label>TLT Symbol</label><input name="vr_tlt_symbol" value="TLT"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>GLD Symbol</label><input name="vr_gld_symbol" value="GLD"></div>
+            <div><label>Warmup Period</label><input name="vr_warmup_period" type="number" value="25"></div>
+          </div>
+          <br><button type="submit">Run Volatility Regime Analysis</button>
+        </form>
+      </div>
+
+      <div id="bollinger_zscore_rsi" class="tab-pane">
+        <h3>Bollinger Z-Score + RSI Strategy</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="bollinger_zscore_rsi">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="bzrsi_symbol" value="AAPL"></div>
+            <div><label>Period</label><select name="bzrsi_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Bollinger Window</label><input name="bzrsi_bb_window" type="number" value="20"></div>
+            <div><label>Bollinger Std Dev</label><input name="bzrsi_bb_std" type="number" step="0.1" value="2.0"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>RSI Period</label><input name="bzrsi_rsi_period" type="number" value="14"></div>
+            <div><label>RSI Oversold</label><input name="bzrsi_rsi_oversold" type="number" step="0.1" value="30.0"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>RSI Overbought</label><input name="bzrsi_rsi_overbought" type="number" step="0.1" value="70.0"></div>
+            <div><label>Z Buy Threshold</label><input name="bzrsi_z_buy" type="number" step="0.1" value="-2.0"></div>
+          </div>
+          <label>Z Sell Threshold</label>
+          <input name="bzrsi_z_sell" type="number" step="0.1" value="2.0">
+          <br><button type="submit">Run Bollinger Z-Score RSI Analysis</button>
+        </form>
+      </div>
+
+      <div id="bollinger_fibonacci" class="tab-pane">
+        <h3>Bollinger Fibonacci Strategy (Backtest)</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="bollinger_fibonacci">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="bf_symbol" value="AAPL"></div>
+            <div><label>Period</label><select name="bf_period"><option>6mo</option><option selected>1y</option><option>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Window</label><input name="bf_window" type="number" value="20"></div>
+            <div><label>Std Dev</label><input name="bf_num_std" type="number" value="2"></div>
+          </div>
+          <label>Swing Points Window</label>
+          <input name="bf_window_swing_points" type="number" value="10">
+          <br><button type="submit">Run Bollinger Fibonacci Strategy</button>
+        </form>
+      </div>
+
+      <div id="macd_donchian" class="tab-pane">
+        <h3>MACD Donchian Strategy</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="macd_donchian">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="md_symbol" value="AAPL"></div>
+            <div><label>Period</label><select name="md_period"><option>6mo</option><option selected>1y</option><option>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Fast EMA</label><input name="md_fast_period" type="number" value="12"></div>
+            <div><label>Slow EMA</label><input name="md_slow_period" type="number" value="26"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Signal Period</label><input name="md_signal_period" type="number" value="9"></div>
+            <div><label>Donchian Window</label><input name="md_window" type="number" value="20"></div>
+          </div>
+          <br><button type="submit">Run MACD Donchian Analysis</button>
+        </form>
+      </div>
+
+      <div id="dual_moving_average" class="tab-pane">
+        <h3>Dual Moving Average Strategy</h3>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="dual_moving_average">
+          <div class="grid-2">
+            <div><label>Symbol</label><input name="dma_symbol" value="AAPL"></div>
+            <div><label>Period</label><select name="dma_period"><option>1y</option><option selected>2y</option><option>5y</option></select></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Short MA</label><input name="dma_short_period" type="number" value="50"></div>
+            <div><label>Long MA</label><input name="dma_long_period" type="number" value="200"></div>
+          </div>
+          <label>MA Type</label>
+          <select name="dma_ma_type"><option selected>SMA</option><option>EMA</option></select>
+          <br><button type="submit">Run Dual Moving Average Analysis</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📄 Result</h3>
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+      {% if result %}
+        <div class="meta">Type: {{ result.analysis_type }} | Agent: {{ result.agent_type }} | Duration: {{ result.duration_seconds }}s</div>
+        {% if request.user.is_authenticated %}
+        <form method="post" style="margin:8px 0;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_current_report">
+          <button type="submit">Save Current Report</button>
+        </form>
+        {% endif %}
+        <textarea id="result-markdown" style="display:none;">{{ result.report }}</textarea>
+        <div class="report" id="result-rendered"></div>
+      {% else %}
+        <div class="report">Run an analysis to see the report here.</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h3>📜 Analysis History</h3>
+      <form method="post" style="margin-bottom: 10px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear_history">
+        <button type="submit" class="secondary">Clear History</button>
+      </form>
+      {% if history %}
+        {% for item in history %}
+          <div class="history-item">
+            <div><strong>{{ forloop.counter }}. {{ item.title }}</strong></div>
+            <div class="meta">{{ item.type }} | {{ item.duration }}s | {{ item.agent_type }}</div>
+            <form method="post" style="display:inline; margin-top:6px;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="open_history">
+              <input type="hidden" name="history_index" value="{{ forloop.counter0 }}">
+              <button type="submit" class="secondary" style="padding:4px 8px; font-size:12px;">Open</button>
+            </form>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="meta">No analysis history yet.</div>
+      {% endif %}
+
+      {% if selected_history %}
+      <hr>
+      <h4>Selected History Report: {{ selected_history.title }}</h4>
+      <textarea id="history-markdown" style="display:none;">{{ selected_history.report }}</textarea>
+      <div class="report" id="history-rendered"></div>
+      {% endif %}
+    </div>
+
+    {% if request.user.is_authenticated %}
+    <div class="card">
+      <h3>💾 Saved Reports (Login History)</h3>
+      {% if saved_reports %}
+        {% for report in saved_reports %}
+          <div class="history-item">
+            <div><strong>{% if report.is_pinned %}📌 {% endif %}{{ report.title }}</strong></div>
+            <div class="meta">{{ report.analysis_type }} | {{ report.created_at }} | {{ report.duration_seconds }}s</div>
+            <a href="/?saved={{ report.id }}">Open</a> |
+            <a href="{% url 'download_report' report.id %}">Download .md</a>
+            <form method="post" style="display:inline; margin-left:8px;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_pin">
+              <input type="hidden" name="report_id" value="{{ report.id }}">
+              <button type="submit" class="secondary" style="padding:4px 8px; font-size:12px;">
+                {% if report.is_pinned %}Unpin{% else %}Pin{% endif %}
+              </button>
+            </form>
+            <form method="post" style="display:inline; margin-left:6px;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_report">
+              <input type="hidden" name="report_id" value="{{ report.id }}">
+              <button type="submit" class="secondary" style="padding:4px 8px; font-size:12px;">Delete</button>
+            </form>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="meta">No saved reports yet. Run analyses while logged in.</div>
+      {% endif %}
+
+      {% if selected_saved %}
+        <hr>
+        <h4>Selected Saved Report: {{ selected_saved.title }}</h4>
+        <textarea id="saved-markdown" style="display:none;">{{ selected_saved.markdown_report }}</textarea>
+        <div class="report" id="saved-rendered"></div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  const initialTab = "{{ active_tab|default:'technical' }}";
+  const select = document.getElementById('analysis-select');
+  const panes = document.querySelectorAll('.tab-pane');
+
+  function activate(tabId) {
+    panes.forEach(pane => pane.classList.toggle('active', pane.id === tabId));
+    if (select) {
+      select.value = tabId;
+    }
+  }
+
+  if (select) {
+    select.addEventListener('change', () => activate(select.value));
+  }
+
+  activate(initialTab);
+
+  function renderMarkdown(sourceId, targetId) {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    if (!source || !target || typeof marked === 'undefined') {
+      return;
+    }
+    target.innerHTML = marked.parse(source.value || "");
+  }
+
+  renderMarkdown('result-markdown', 'result-rendered');
+  renderMarkdown('saved-markdown', 'saved-rendered');
+  renderMarkdown('history-markdown', 'history-rendered');
+</script>
+</body>
+</html>

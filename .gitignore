@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+uv.lock.bak
+.eval_outputs/
+.pyrit_outputs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+CLAUDE.md
+.lock
+microsoft_agent_framework_app/uv.lock
+adk_financial_mcp_server/server/uv.lock

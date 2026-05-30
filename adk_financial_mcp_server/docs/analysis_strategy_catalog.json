@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "legend": {
+    "analysis": "research/screening/synthesis item",
+    "strategy": "rule-based trading strategy evaluation item"
+  },
+  "items": [
+    {"action": "technical", "endpoint": "/technical", "type": "analysis"},
+    {"action": "scanner", "endpoint": "/scanner", "type": "analysis"},
+    {"action": "fundamental", "endpoint": "/fundamental", "type": "analysis"},
+    {"action": "multisector", "endpoint": "/multisector", "type": "analysis"},
+    {"action": "combined", "endpoint": "/combined", "type": "analysis"},
+    {"action": "overnight_gaps", "endpoint": "/overnight_gaps", "type": "analysis"},
+    {"action": "earnings_momentum", "endpoint": "/earnings_momentum", "type": "analysis"},
+
+    {"action": "bollinger_breakout", "endpoint": "/bollinger_breakout", "type": "strategy"},
+    {"action": "gap_fade", "endpoint": "/gap_fade", "type": "strategy"},
+    {"action": "multi_timeframe", "endpoint": "/multi_timeframe", "type": "strategy"},
+    {"action": "pairs_trading", "endpoint": "/pairs_trading", "type": "strategy"},
+    {"action": "statistical_arbitrage", "endpoint": "/statistical_arbitrage", "type": "strategy"},
+    {"action": "vix_term_structure", "endpoint": "/vix_term_structure", "type": "strategy"},
+    {"action": "volatility_regime", "endpoint": "/volatility_regime", "type": "strategy"},
+    {"action": "bollinger_zscore_rsi", "endpoint": "/bollinger_zscore_rsi", "type": "strategy"},
+    {"action": "bollinger_fibonacci", "endpoint": "/bollinger_fibonacci", "type": "strategy"},
+    {"action": "macd_donchian", "endpoint": "/macd_donchian", "type": "strategy"},
+    {"action": "dual_moving_average", "endpoint": "/dual_moving_average", "type": "strategy"}
+  ],
+  "ui": {
+    "analysisIcon": "🔎",
+    "strategyIcon": "🧪",
+    "analysisSuffix": "(Analysis)",
+    "strategySuffix": "(Strategy)"
+  },
+  "guardrails": {
+    "analysis": {
+      "mustNotClaimBacktestWithoutMetrics": true,
+      "mustUseOnlyProvidedMetrics": true
+    },
+    "strategy": {
+      "mustInterpretRuleBasedPerformance": true,
+      "mustUseToolGroundedMetrics": true,
+      "mustNotClaimNoDataWhenMetricsExist": true
+    }
+  }
+}

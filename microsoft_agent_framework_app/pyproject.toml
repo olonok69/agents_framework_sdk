@@ -1,0 +1,49 @@
+[project]
+name = "ms-agent-app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "agent-framework>=1.4.0",
+    "agent-framework-foundry>=1.4.0",
+    "azure-ai-evaluation>=1.0.0",
+    "azure-identity>=1.26.0b2",
+    "mcp>=1.27.1",
+    "pydantic-settings>=2.14.1",
+    "python-dotenv>=1.2.2",
+]
+
+[project.optional-dependencies]
+redteam = [
+    "pyrit>=0.13.0",
+]
+
+[project.scripts]
+ms-agent-app = "ms_agent_app.cli:main"
+ms-agent-redteam = "ms_agent_app.redteam.run:main"
+
+[tool.uv]
+link-mode = "copy"
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.13",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
