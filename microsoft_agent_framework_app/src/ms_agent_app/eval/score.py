@@ -1,3 +1,10 @@
+"""Evaluation scoring pipeline for ms-agent-app.
+
+This module runs curated prompts through the same runtime agent used by chat,
+then evaluates outputs with Azure AI Evaluation evaluators using a configurable
+judge provider.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +29,13 @@ from .runner import Trajectory
 
 
 def _model_config(settings: Settings) -> AzureOpenAIModelConfiguration | OpenAIModelConfiguration:
+    """Build the judge model configuration for Azure AI Evaluation.
+
+    Judge selection is routed through `settings.judge_provider` and validated
+    before constructing the evaluator configuration object.
+    """
     if settings.judge_provider == "azure-openai":
+        # Azure judge path uses deployment-based routing and API-versioned endpoint.
         missing = [
             name
             for name, val in (
@@ -44,6 +57,7 @@ def _model_config(settings: Settings) -> AzureOpenAIModelConfiguration | OpenAIM
 
     api_key = settings.judge_openai_api_key or settings.openai_api_key
     model = settings.judge_openai_model or settings.openai_chat_model or settings.openai_model
+    # Provide stable OpenAI default endpoint when no custom base URL is set.
     base_url = settings.judge_openai_base_url or settings.openai_base_url or "https://api.openai.com/v1"
 
     missing = [
@@ -80,6 +94,7 @@ def _extract_tool_definitions(mcp_server) -> list[dict[str, Any]]:
         params_attr = getattr(fn, "parameters", None)
         # FunctionTool.parameters is a method in the agent-framework prerelease;
         # call it if needed, accept it either way.
+        # Some framework versions expose `parameters` as method, others as dict.
         params = params_attr() if callable(params_attr) else params_attr
         if not name or not isinstance(params, dict):
             continue
@@ -96,6 +111,7 @@ def _extract_tool_definitions(mcp_server) -> list[dict[str, Any]]:
 async def _collect_trajectories(
     settings: Settings, cases: tuple[EvalCase, ...]
 ) -> tuple[list[Trajectory], list[dict[str, Any]]]:
+    """Execute all eval prompts and return trajectories + tool schemas."""
     trajectories: list[Trajectory] = []
     async with open_finance_mcp_tool(settings) as mcp_server:
         tool_definitions = _extract_tool_definitions(mcp_server)
@@ -115,6 +131,7 @@ def _score_one(
     tool_eval,
     tool_definitions: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    """Run all applicable evaluators for one trajectory/case pair."""
     intent = intent_eval(query=traj.query_messages, response=traj.response_messages)
     task = task_eval(query=traj.query_messages, response=traj.response_messages)
     record: dict[str, Any] = {
@@ -125,6 +142,7 @@ def _score_one(
         "intent_resolution": intent,
         "task_adherence": task,
     }
+    # Only run tool-call evaluator when the response attempted tool usage.
     if traj.tool_calls:
         tool = tool_eval(
             query=traj.query_messages,
@@ -137,6 +155,7 @@ def _score_one(
 
 
 async def _amain() -> int:
+    """Async orchestration for the full evaluation run."""
     settings = Settings()
     model_config = _model_config(settings)
     print(f"Eval judge provider: {settings.judge_provider}")
@@ -147,6 +166,7 @@ async def _amain() -> int:
 
     trajectories, tool_definitions = await _collect_trajectories(settings, CASES)
     results: list[dict[str, Any]] = []
+    # `strict=True` guarantees accidental case/result count drift fails loudly.
     for traj, case in zip(trajectories, CASES, strict=True):
         results.append(_score_one(traj, case, intent_eval, task_eval, tool_eval, tool_definitions))
 
@@ -159,6 +179,7 @@ async def _amain() -> int:
 
 
 def main() -> int:
+    """CLI entrypoint for `python -m ms_agent_app.eval.score`."""
     return asyncio.run(_amain())
 
 

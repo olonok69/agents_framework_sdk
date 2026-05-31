@@ -687,3 +687,7 @@ Este servidor se proporciona para fines educativos e investigación. Siempre ver
 ---
 
 *Construido con [FastMCP](https://github.com/anthropics/anthropic-cookbook/tree/main/misc/mcp) y [yfinance](https://github.com/ranaroussi/yfinance)*
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction

@@ -687,3 +687,6 @@ This server is provided for educational and research purposes. Always verify ana
 ---
 
 *Built with [FastMCP](https://github.com/anthropics/anthropic-cookbook/tree/main/misc/mcp) and [yfinance](https://github.com/ranaroussi/yfinance)*
+
+## Prompt Hacking Reference
+- https://learnprompting.org/docs/prompt_hacking/introduction

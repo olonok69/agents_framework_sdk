@@ -27,7 +27,9 @@ from .target import AgentFrameworkTarget
 
 
 def _require_judge_env(settings: Settings) -> None:
+    """Validate environment variables required by the configured judge provider."""
     if settings.judge_provider == "azure-openai":
+        # Azure judge path requires endpoint + deployment + API key tuple.
         missing = [
             name
             for name, val in (
@@ -63,10 +65,12 @@ def _build_judge_target(settings: Settings) -> Any:
     from pyrit.prompt_target import OpenAIChatTarget
 
     if settings.judge_provider == "azure-openai":
+        # PyRIT OpenAI target expects Azure endpoint in `/openai/v1` shape.
         endpoint = (settings.azure_endpoint or "").rstrip("/") + "/openai/v1"
         api_key = settings.azure_api_key
         model = settings.azure_deployment_name
     else:
+        # Default to OpenAI public base URL when no override is configured.
         endpoint = (settings.judge_openai_base_url or settings.openai_base_url or "https://api.openai.com/v1").rstrip("/")
         api_key = settings.judge_openai_api_key or settings.openai_api_key
         model = settings.judge_openai_model or settings.openai_chat_model or settings.openai_model
@@ -129,6 +133,7 @@ def _serialize_incomplete(case: RedTeamCase, exc: BaseException) -> dict[str, An
 
 
 async def _amain() -> int:
+    """Run the full red-team workflow and write results to disk."""
     settings = Settings()
     _require_judge_env(settings)
     print(f"PyRIT judge provider: {settings.judge_provider}")
@@ -141,6 +146,7 @@ async def _amain() -> int:
     from pyrit.score import SelfAskRefusalScorer
     from pyrit.setup import IN_MEMORY, initialize_pyrit_async
 
+    # Keep runtime self-contained by using in-memory PyRIT storage for this demo.
     await initialize_pyrit_async(IN_MEMORY)
 
     judge_target = _build_judge_target(settings)
@@ -163,12 +169,14 @@ async def _amain() -> int:
     # completed_results may be shorter than CASES if some inputs failed; input_indices
     # maps each completed result back to its original case index.
     for completed_idx, case_idx in enumerate(bundle.input_indices):
+        # Re-map completed outputs back to original case indices.
         results[case_idx] = _serialize_completed(
             CASES[case_idx], bundle.completed_results[completed_idx]
         )
     # incomplete_objectives carry (objective_text, exception) tuples — match back by text.
     objective_to_case = {case.objective: case for case in CASES}
     for objective_text, exc in bundle.incomplete_objectives:
+        # Preserve per-case failure records instead of aborting the full run.
         case = objective_to_case.get(objective_text)
         if case is None:
             continue
@@ -186,6 +194,7 @@ async def _amain() -> int:
 
 
 def main() -> int:
+    """CLI entrypoint for `python -m ms_agent_app.redteam.run`."""
     return asyncio.run(_amain())
 
 

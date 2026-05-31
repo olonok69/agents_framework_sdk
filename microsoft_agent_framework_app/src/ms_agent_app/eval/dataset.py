@@ -1,3 +1,9 @@
+"""Curated evaluation cases used by the Phase 3 scoring pipeline.
+
+The dataset is intentionally small and deterministic so it can be used as a
+repeatable smoke test for intent handling and tool-usage behavior.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,6 +11,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class EvalCase:
+    """Single evaluation scenario consumed by the runner and scorer."""
+
     case_id: str
     prompt: str
     expected_intent: str

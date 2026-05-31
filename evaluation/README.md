@@ -257,3 +257,7 @@ Presentation and deep-dive documentation is available under `docs/`:
 
 ---
 
+
+
+## Prompt Hacking Reference
+- https://learnprompting.org/docs/prompt_hacking/introduction

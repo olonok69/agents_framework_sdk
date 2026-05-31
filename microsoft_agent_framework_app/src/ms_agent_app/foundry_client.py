@@ -1,3 +1,9 @@
+"""Provider-specific chat client builders.
+
+Each helper maps validated `Settings` into a concrete client from
+`agent_framework` so higher layers can remain provider-agnostic.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +27,7 @@ def build_foundry_client(settings: Settings) -> FoundryChatClient:
     """
     kwargs: dict = {"exclude_interactive_browser_credential": True}
     if settings.azure_tenant_id:
+        # Restrict token acquisition to the configured tenant when provided.
         kwargs["additionally_allowed_tenants"] = [settings.azure_tenant_id]
     credential = DefaultAzureCredential(**kwargs)
 
@@ -33,6 +40,7 @@ def build_foundry_client(settings: Settings) -> FoundryChatClient:
 
 def build_openai_client(settings: Settings) -> OpenAIChatClient:
     """Create an OpenAIChatClient targeting the OpenAI API."""
+    # Preserve backward compatibility with either OPENAI_CHAT_MODEL or OPENAI_MODEL.
     model = settings.openai_chat_model or settings.openai_model
     return OpenAIChatClient(
         model=model,
@@ -43,6 +51,7 @@ def build_openai_client(settings: Settings) -> OpenAIChatClient:
 
 def build_azure_openai_client(settings: Settings) -> OpenAIChatClient:
     """Create an OpenAIChatClient configured for Azure OpenAI routing."""
+    # Support both new and legacy variable names for Azure model deployment.
     model = settings.azure_openai_chat_model or settings.azure_openai_model
     kwargs: dict[str, Any] = {
         "model": model,
@@ -50,8 +59,10 @@ def build_azure_openai_client(settings: Settings) -> OpenAIChatClient:
         "api_version": settings.azure_openai_api_version,
     }
     if settings.azure_openai_api_key:
+        # Prefer explicit API key when configured.
         kwargs["api_key"] = settings.azure_openai_api_key
     else:
+        # Fall back to Azure identity chain for local/dev and managed environments.
         kwargs["credential"] = DefaultAzureCredential(exclude_interactive_browser_credential=True)
     return OpenAIChatClient(**kwargs)
 
@@ -70,6 +81,7 @@ def build_chat_client(settings: Settings, provider: str | None = None):
 
     Supported providers: foundry, openai, azure-openai, anthropic.
     """
+    # Keep one dispatch point so all callers share provider routing behavior.
     selected = provider or settings.model_provider
     if selected == "foundry":
         return build_foundry_client(settings)

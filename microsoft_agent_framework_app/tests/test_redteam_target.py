@@ -1,3 +1,5 @@
+"""Unit tests for the PyRIT PromptTarget adapter around Agent Framework."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -18,19 +20,23 @@ from ms_agent_app.redteam.target import AgentFrameworkTarget  # noqa: E402
 
 @pytest.fixture(autouse=True)
 async def _init_pyrit_memory():
+    """Initialize PyRIT in-memory state for each test run."""
     await initialize_pyrit_async(IN_MEMORY)
 
 
 def _user_msg(text: str) -> Message:
+    """Build a minimal PyRIT user message payload for adapter tests."""
     return Message(message_pieces=[MessagePiece(role="user", original_value=text)])
 
 
 async def test_target_forwards_prompt_and_wraps_reply():
+    """Adapter should forward prompt text and return one assistant response message."""
     agent = SimpleNamespace(run=AsyncMock(return_value=SimpleNamespace(text="ok reply")))
     target = AgentFrameworkTarget(agent)
 
     out = await target.send_prompt_async(message=_user_msg("hello"))
 
+    # Adapter must pass only prompt text to the underlying agent.
     agent.run.assert_awaited_once_with("hello")
     assert len(out) == 1
     piece = out[0].message_pieces[0]

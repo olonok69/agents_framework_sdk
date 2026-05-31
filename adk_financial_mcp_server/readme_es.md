@@ -662,3 +662,7 @@ Proyecto disponible para fines educativos. Los usuarios deben cumplir con:
 <p align="center">
   <b>Construido con ❤️ usando Google ADK, MCP, FastAPI y Django</b>
 </p>
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction

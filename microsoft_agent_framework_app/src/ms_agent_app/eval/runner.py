@@ -1,3 +1,9 @@
+"""Trajectory capture utilities for evaluation.
+
+This module normalizes Agent Framework request/response data into the message
+shape expected by Azure AI Evaluation evaluators.
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +13,7 @@ from typing import Any
 
 
 def to_query_messages(text: str) -> list[dict[str, Any]]:
+    """Convert raw user text into evaluator-compatible query messages."""
     return [{"role": "user", "content": [{"type": "text", "text": text}]}]
 
 
@@ -15,8 +22,10 @@ def to_response_messages(
     text: str,
     tool_calls: Iterable[dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    """Convert assistant text/tool calls into evaluator-compatible messages."""
     content: list[dict[str, Any]] = []
     for call in tool_calls:
+        # Emit each tool call in the schema expected by ToolCallAccuracyEvaluator.
         content.append(
             {
                 "type": "tool_call",
@@ -49,8 +58,10 @@ def _extract_tool_calls(result: Any) -> list[dict[str, Any]]:
             args = getattr(c, "arguments", None)
             if isinstance(args, str):
                 try:
+                    # Agent Framework may serialize tool arguments as JSON strings.
                     args = json.loads(args)
                 except json.JSONDecodeError:
+                    # Keep raw value if parsing fails; evaluator can still inspect it.
                     pass
             normalized.append(
                 {
@@ -64,6 +75,8 @@ def _extract_tool_calls(result: Any) -> list[dict[str, Any]]:
 
 @dataclass
 class Trajectory:
+    """Captured interaction for one evaluation case."""
+
     case_id: str
     prompt: str
     response_text: str = ""
@@ -71,16 +84,20 @@ class Trajectory:
 
     @property
     def query_messages(self) -> list[dict[str, Any]]:
+        """Return the normalized query message payload for evaluators."""
         return to_query_messages(self.prompt)
 
     @property
     def response_messages(self) -> list[dict[str, Any]]:
+        """Return the normalized assistant response payload for evaluators."""
         return to_response_messages(text=self.response_text, tool_calls=self.tool_calls)
 
     async def record(self, agent, *, tools=None) -> None:
+        """Run a prompt through the agent and store normalized outputs."""
         kwargs: dict[str, Any] = {}
         if tools is not None:
             kwargs["tools"] = tools
         result = await agent.run(self.prompt, **kwargs)
+        # Always preserve a printable fallback even if `.text` is absent.
         self.response_text = getattr(result, "text", "") or str(result)
         self.tool_calls = _extract_tool_calls(result)

@@ -467,3 +467,7 @@ print(f"Session active: {session is not None}")
 
 ---
 
+
+
+## Prompt Hacking Reference
+- https://learnprompting.org/docs/prompt_hacking/introduction

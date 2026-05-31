@@ -296,3 +296,7 @@ curl -X POST "http://localhost:8000/multisector" \
 <p align="center">
   <i>Stock Analyzer Bot – Runtime ADK + MCP + FastAPI</i>
 </p>
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction

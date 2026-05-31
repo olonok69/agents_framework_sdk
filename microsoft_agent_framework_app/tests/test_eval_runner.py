@@ -1,3 +1,5 @@
+"""Unit tests for evaluation message normalization and trajectory recording."""
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -7,21 +9,24 @@ from ms_agent_app.eval.runner import Trajectory, to_query_messages, to_response_
 
 
 def test_to_query_messages_wraps_text_in_openai_schema():
+    """User text should be wrapped in evaluator-compatible query schema."""
     msgs = to_query_messages("hello there")
     assert msgs == [{"role": "user", "content": [{"type": "text", "text": "hello there"}]}]
 
 
 def test_to_response_messages_handles_plain_text():
+    """Plain assistant text should produce one assistant text content item."""
     msgs = to_response_messages(text="hi back", tool_calls=[])
     assert msgs == [{"role": "assistant", "content": [{"type": "text", "text": "hi back"}]}]
 
 
 def test_to_response_messages_includes_tool_calls():
+    """Tool call metadata should be included alongside final assistant text."""
     msgs = to_response_messages(
         text="done",
         tool_calls=[{"tool_name": "finance_tools.dual_ma", "arguments": {"symbol": "AAPL"}}],
     )
-    # one assistant message with tool_calls + text
+    # One assistant message should contain both tool-call events and final text.
     assert msgs[0]["role"] == "assistant"
     assert any(c["type"] == "tool_call" for c in msgs[0]["content"])
     assert any(c["type"] == "text" for c in msgs[0]["content"])
@@ -29,6 +34,7 @@ def test_to_response_messages_includes_tool_calls():
 
 @pytest.mark.asyncio
 async def test_trajectory_records_run():
+    """Trajectory.record should capture assistant text and empty tool calls."""
     fake_agent = SimpleNamespace(
         run=AsyncMock(
             return_value=SimpleNamespace(
@@ -64,6 +70,7 @@ async def test_trajectory_extracts_tool_calls_from_messages():
             SimpleNamespace(role="assistant", contents=[final_text_content]),
         ],
     )
+    # Simulate real agent output shape, then assert normalized extraction.
     fake_agent = SimpleNamespace(run=AsyncMock(return_value=fake_response))
 
     traj = Trajectory(case_id="t", prompt="Run dual MA on AAPL")

@@ -33,3 +33,7 @@ python manage.py runserver 0.0.0.0:8501
 4. Open:
 
 - http://127.0.0.1:8501/
+
+
+## Prompt Hacking Reference
+- https://learnprompting.org/docs/prompt_hacking/introduction

@@ -34,6 +34,7 @@ class AgentFrameworkTarget(PromptTarget):  # type: ignore[misc]
     async def send_prompt_async(self, *, message: Message) -> list[Message]:
         from pyrit.models import construct_response_from_request
 
+        # Enforce PromptTarget input contract before touching message payload.
         self._validate_request(message=message)
         request_piece = message.message_pieces[0]
         prompt_text = request_piece.converted_value
@@ -41,6 +42,7 @@ class AgentFrameworkTarget(PromptTarget):  # type: ignore[misc]
         result = await self._agent.run(prompt_text)
         reply_text = getattr(result, "text", "") or str(result)
 
+        # Reuse request metadata so PyRIT memory/threading remains consistent.
         response = construct_response_from_request(
             request=request_piece,
             response_text_pieces=[reply_text],

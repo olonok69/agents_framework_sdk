@@ -101,3 +101,7 @@ streamlit run main_2.py
 - Flujo OAuth2 On-Behalf-Of: https://learn.microsoft.com/azure/active-directory/develop/v2-oauth2-on-behalf-of-flow
 - Microsoft 365 Copilot retrieval API: https://learn.microsoft.com/en-us/microsoft-365-copilot/extensibility/api-reference/retrieval-api-overview
 - Semantic indexing for Copilot: https://learn.microsoft.com/en-us/microsoftsearch/semantic-index-for-copilot
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction

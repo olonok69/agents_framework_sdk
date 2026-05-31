@@ -1,3 +1,14 @@
+"""Environment-backed configuration for ms-agent-app.
+
+This module defines the `Settings` model used by all runtime paths:
+- interactive chat
+- evaluation
+- red-team execution
+
+Validation ensures required environment variables exist for the selected
+runtime provider and judge provider.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -12,6 +23,11 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
+    """Typed configuration loaded from environment variables.
+
+    Field aliases map internal snake_case names to the env var contract used in
+    docs and `.env.example`.
+    """
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     model_provider: Literal["foundry", "openai", "azure-openai", "anthropic"] = Field(
@@ -55,6 +71,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_model_provider_requirements(self):
+        """Verify provider-specific required settings are present.
+
+        The required set depends on `MODEL_PROVIDER`, allowing the app to fail
+        early with a clear configuration message.
+        """
+        # Build provider-specific required field list and fail fast with context.
         if self.model_provider == "foundry":
             missing = [
                 name
@@ -107,8 +129,10 @@ class Settings(BaseSettings):
     @field_validator("mcp_finance_server_path", mode="before")
     @classmethod
     def _resolve_server_path(cls, v):
+        """Normalize MCP server path values to absolute `Path` objects."""
         if not v:
             return None
+        # Expand `~` and convert to absolute path to avoid cwd-dependent behavior.
         return Path(v).expanduser().resolve()
 
     def mcp_python(self) -> str:

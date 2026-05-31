@@ -256,3 +256,7 @@ La documentación de presentación y detalle técnico está en `docs/`:
 3. Ejecuta `03_azure_ai_eval_agents.py` para métricas agénticas alineadas a Azure y evaluación batch.
 4. Usa `docs/technical_guide_en.md` o `docs/technical_guide_es.md` como referencia para explicación técnica.
 ---
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction

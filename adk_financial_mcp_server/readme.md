@@ -661,3 +661,7 @@ This project is provided for educational purposes. Users must comply with:
 
 ---
 
+
+
+## Prompt Hacking Reference
+- https://learnprompting.org/docs/prompt_hacking/introduction

@@ -1,4 +1,13 @@
-"""Microsoft Agent Framework demo: Foundry agent + local MCP tools + Azure AI Evaluation."""
+"""Top-level package for the ms-agent-app demo application.
+
+The package provides:
+- chat runtime with pluggable model providers
+- optional local MCP finance tooling
+- evaluation and red-team workflows
+
+It also applies targeted warning filters for known noisy experimental warnings
+emitted by upstream `agent_framework` internals.
+"""
 
 from __future__ import annotations
 

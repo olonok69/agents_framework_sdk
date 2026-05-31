@@ -371,3 +371,7 @@ uv run ruff format --check .
 - `../adk_financial_mcp_server` — finance MCP server acoplado en la Fase 2.
 - `../evaluation` — scripts de referencia de DeepEval / Inspect AI / Azure AI Evaluation; `03_azure_ai_eval_agents.py` es el ancestro conceptual de `ms_agent_app/eval/score.py`.
 - `../azure_foundry_sharepoint` — agente de Foundry anterior con grounding en SharePoint; origen del layout de `.env` y del patrón de reutilización de credenciales SP.
+
+
+## Referencia sobre Prompt Hacking
+- https://learnprompting.org/docs/prompt_hacking/introduction
