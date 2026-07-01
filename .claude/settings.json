@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /d/repos2/agents_framework/microsoft_agent_framework_app && find safety_engine -type f | head -100)",
+      "Read(//d/repos2/agents_framework/microsoft_agent_framework_app/**)",
+      "PowerShell($src=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\safety_engine\"; $dst=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\src\\\\ms_agent_app\\\\safety_engine\"; \"SOURCE exists: $\\(Test-Path $src\\)\"; if\\(Test-Path $src\\){ \"--- source contents ---\"; Get-ChildItem $src -Recurse -Name }; \"DEST exists: $\\(Test-Path $dst\\)\"; \"--- dest contents ---\"; Get-ChildItem $dst -Recurse -Name)",
+      "PowerShell($srcFile=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\safety_engine\\\\docs\\\\Safety_and_Trust_Engine.pptx\"; $dstDir=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\src\\\\ms_agent_app\\\\safety_engine\\\\docs\"; try { Move-Item -Path $srcFile -Destination $dstDir -Force -ErrorAction Stop; Remove-Item \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\safety_engine\" -Recurse -Force; \"SUCCESS: pptx moved and old folder removed\" } catch { \"STILL LOCKED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($srcFile=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\safety_engine\\\\docs\\\\Safety_and_Trust_Engine.pptx\"; $dstDir=\"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\src\\\\ms_agent_app\\\\safety_engine\\\\docs\"; try { Move-Item -Path $srcFile -Destination $dstDir -Force -ErrorAction Stop; Remove-Item \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\safety_engine\" -Recurse -Force; \"SUCCESS: pptx moved and old top-level folder removed\" } catch { \"STILL LOCKED: $\\($_.Exception.Message\\)\" })",
+      "Bash(sed -n '1,80p' src/ms_agent_app/redteam/target.py)",
+      "Bash(sed -n '1,60p' src/ms_agent_app/redteam/run.py)",
+      "Bash(export UV_PROJECT_ENVIRONMENT=/home/olonok/.venvs/ms-agent-app)",
+      "Bash(sed -n '/optional-dependencies/,/^\\\\[/p' pyproject.toml)",
+      "Bash(sed -n '/project.scripts/,/^\\\\[/p' pyproject.toml)",
+      "PowerShell(cd \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\"; \"=== garak WITH PYTHONUTF8=1 \\(expect past the emoji crash\\) ===\"; $env:PYTHONUTF8=1; uv run python -m garak --model_type azure --model_name gpt-4.1 --probes dan --generations 1 2>&1 | Select-Object -First 12; \"=== inspect agentdojo real error ===\"; uv run inspect eval inspect_evals/agentdojo --model azureai/gpt-4.1 -T attack=important_instructions --limit 1 2>&1 | Select-Object -First 20)",
+      "PowerShell(cd \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\"; $env:PYTHONUTF8=1; $out = \\(uv run python -m garak --model_type azure --model_name gpt-4.1 --probes dan --generations 1 2>&1 | Out-String\\); \\($out -split \"`n\" | Select-Object -Last 12\\) -join \"`n\")",
+      "Bash(cd /d/repos2/agents_framework/microsoft_agent_framework_app && export UV_PROJECT_ENVIRONMENT=/home/olonok/.venvs/ms-agent-app && echo \"=== available garak versions ===\" && uv pip index versions garak 2>&1 | grep -v VIRTUAL_ENV | head -5)",
+      "Bash(python -c \"import urllib.request,json; d=json.load\\(urllib.request.urlopen\\('https://pypi.org/pypi/garak/json'\\)\\); vs=sorted\\(d['releases'].keys\\(\\)\\); print\\('total:',len\\(vs\\)\\); print\\('latest 8:',vs[-8:]\\); print\\('requires_python\\(latest\\):', d['info']['requires_python']\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(unzip -o -q garak*.whl -d unpacked)",
+      "Bash(xargs -n1 basename)",
+      "Bash(uv lock *)",
+      "Read(//tmp/gtest/**)",
+      "Bash(sed -n '240,275p' garak/generators/rest.py)",
+      "Bash(sed -n '40,80p' src/ms_agent_app/redteam/target.py)",
+      "PowerShell($src = \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\src\\\\ms_agent_app\\\\safety_engine\\\\docs\"; $dst = \"d:\\\\repos2\\\\safety-trust-engine\\\\docs\"; New-Item -ItemType Directory -Force -Path $dst | Out-Null; Copy-Item \"$src\\\\Regulatory_research.md\" \"$dst\\\\REGULATORY_RESEARCH.md\" -Force; Copy-Item \"$src\\\\pipeline.svg\" \"$dst\\\\pipeline.svg\" -Force; Copy-Item \"$src\\\\guide_en.md\" \"$dst\\\\guide_en.md\" -Force; Get-ChildItem $dst -Name)",
+      "PowerShell(Copy-Item \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\src\\\\ms_agent_app\\\\safety_engine\\\\Regulatory_research.md\" \"d:\\\\repos2\\\\safety-trust-engine\\\\docs\\\\REGULATORY_RESEARCH.md\" -Force)",
+      "PowerShell(cd \"d:\\\\repos2\\\\safety-trust-engine\"; $env:VIRTUAL_ENV=$null; \"=== uv sync ===\"; uv sync 2>&1 | Select-Object -Last 4; \"=== ruff ===\"; uv run ruff check . 2>&1 | Select-Object -Last 4; \"=== pytest ===\"; uv run pytest -q 2>&1 | Select-Object -Last 12)",
+      "PowerShell(cd \"d:\\\\repos2\\\\safety-trust-engine\"; $env:VIRTUAL_ENV=$null; \"=== ruff --fix ===\"; uv run ruff check --fix . 2>&1 | Select-Object -Last 4; \"=== ruff recheck ===\"; uv run ruff check . 2>&1 | Select-Object -Last 3; \"=== demo CLI \\(expect Overall: FAIL, exit 1\\) ===\"; uv run safety-engine --demo --out runs 2>&1 | Select-Object -Last 8; \"exit=$LASTEXITCODE\")",
+      "PowerShell(cd \"d:\\\\repos2\\\\safety-trust-engine\"; git init -q; git add -A; \"=== staged files \\(excludes .venv/runs via .gitignore\\) ===\"; git status --short | Select-Object -First 40; \"=== count ===\"; \\(git status --short | Measure-Object\\).Count)",
+      "PowerShell(Copy-Item \"d:\\\\repos2\\\\agents_framework\\\\microsoft_agent_framework_app\\\\.env\" \"d:\\\\repos2\\\\safety-trust-engine\\\\.env\" -Force; \"=== .env copied; gitignored? ===\"; cd \"d:\\\\repos2\\\\safety-trust-engine\"; git check-ignore .env; \"=== confirm not staged ===\"; git status --short .env; if \\(-not \\(git status --short .env\\)\\) { \"OK: .env not tracked\" })"
+    ],
+    "additionalDirectories": [
+      "d:\\repos2\\agents_framework\\microsoft_agent_framework_app\\safety_engine",
+      "d:\\repos2\\safety-trust-engine"
+    ]
+  }
+}

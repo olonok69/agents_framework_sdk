@@ -1,0 +1,9 @@
+2026-06-15 20:20:56,679  INFO  invoked with arguments Namespace(model_type='azure', model_name='gpt-4.1', seed=None, generations=1, probes='dan', detectors='', eval_threshold=0.5, deprefix=False, plugin_info=None, list_probes=False, list_detectors=False, list_generators=False, version=False, verbose=0, generator_option=None, report_prefix='')
+2026-06-15 20:20:56,860  INFO  started at 2026-06-15T20:20:56.635943
+2026-06-15 20:20:56,862  INFO  reporting to garak.e90d4128-f1c9-4b4f-ac7f-78c251cfbf8c.report.jsonl
+2026-06-15 20:21:31,097  INFO  invoked with arguments Namespace(model_type='azure', model_name='gpt-4.1', seed=None, generations=1, probes='dan', detectors='', eval_threshold=0.5, deprefix=False, plugin_info=None, list_probes=False, list_detectors=False, list_generators=False, version=False, verbose=0, generator_option=None, report_prefix='')
+2026-06-15 20:21:31,187  INFO  started at 2026-06-15T20:21:31.025474
+2026-06-15 20:21:31,187  INFO  reporting to garak.8d4f51af-7670-47b5-be9e-99305ed3c65b.report.jsonl
+2026-06-15 20:22:23,641  INFO  invoked with arguments Namespace(model_type='azure', model_name='gpt-4.1', seed=None, generations=1, probes='dan', detectors='', eval_threshold=0.5, deprefix=False, plugin_info=None, list_probes=False, list_detectors=False, list_generators=False, version=False, verbose=0, generator_option=None, report_prefix='')
+2026-06-15 20:22:23,705  INFO  started at 2026-06-15T20:22:23.595545
+2026-06-15 20:22:23,705  INFO  reporting to garak.aa64786a-9225-4d3e-91db-333f5f224f14.report.jsonl

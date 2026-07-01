@@ -20,10 +20,17 @@ dependencies = [
 redteam = [
     "pyrit>=0.13.0",
 ]
+safety = [
+    "garak>=0.9.0.4",
+    "inspect-ai>=0.3.239",
+    "inspect-evals>=0.13.2",
+    "pyrit>=0.13.0",
+]
 
 [project.scripts]
 ms-agent-app = "ms_agent_app.cli:main"
 ms-agent-redteam = "ms_agent_app.redteam.run:main"
+ms-agent-safety = "ms_agent_app.safety_engine.run:main"
 
 [tool.uv]
 link-mode = "copy"

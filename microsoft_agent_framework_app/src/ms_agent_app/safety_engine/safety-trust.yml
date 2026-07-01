@@ -1,0 +1,70 @@
+name: safety-trust
+
+# The Safety & Trust gate. Runs on every PR (fast, offline smoke) and nightly
+# (full, live red-team against the deployed target). A tolerance breach fails
+# the job and blocks the merge; the evidence artifact is uploaded either way.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC nightly -- DORA "at least annually" cadence, daily here
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Fast offline gate on every PR: deterministic, no keys, no model calls.
+    name: PR smoke gate (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run offline safety gate
+        run: python -m safety_engine.run --demo --out runs
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-evidence-smoke
+          path: runs/
+
+  redteam:
+    # Full live red-team. Scheduled (and on demand), not per-PR -- the live
+    # stages cost real model calls. Targets the deployed Bedrock agent.
+    name: Full red-team gate (live)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      JUDGE_PROVIDER: ${{ secrets.JUDGE_PROVIDER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install red-team extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install garak inspect-ai inspect-evals "pyrit>=0.13.0"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Run full safety gate
+        run: |
+          python -m safety_engine.run \
+            --stages garak,agentdojo,pyrit \
+            --target-provider bedrock \
+            --target-model "${{ vars.BEDROCK_MODEL_ID }}" \
+            --out runs
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-evidence-redteam
+          path: runs/

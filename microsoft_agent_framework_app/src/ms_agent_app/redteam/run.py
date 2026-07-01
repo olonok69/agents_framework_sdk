@@ -132,12 +132,15 @@ def _serialize_incomplete(case: RedTeamCase, exc: BaseException) -> dict[str, An
     }
 
 
-async def _amain() -> int:
-    """Run the full red-team workflow and write results to disk."""
-    settings = Settings()
-    _require_judge_env(settings)
-    print(f"PyRIT judge provider: {settings.judge_provider}")
+async def run_campaign(settings: Settings) -> list[dict[str, Any] | None]:
+    """Execute the PyRIT attack pass and return one serialized record per case.
 
+    This is the reusable core of the red-team pass: it builds the Foundry-backed
+    agent, runs every case through `SelfAskRefusalScorer`, and returns the
+    per-case result dicts (without writing any files). `_amain` wraps it with
+    disk output for the CLI; `run_campaign_sync` wraps it with category
+    aggregation for the Safety & Trust engine's PyRIT stage.
+    """
     from pyrit.executor.attack import (
         AttackExecutor,
         AttackScoringConfig,
@@ -181,6 +184,53 @@ async def _amain() -> int:
         if case is None:
             continue
         results[CASES.index(case)] = _serialize_incomplete(case, exc)
+
+    return results
+
+
+def run_campaign_sync(target: dict | None = None) -> list[dict[str, Any]]:
+    """Run the campaign and aggregate per-case results by category.
+
+    This is the seam the Safety & Trust engine's PyRIT stage imports
+    (`safety_engine.stages.run_pyrit`). It returns rows in the shape
+    `safety_engine.stages._normalize_pyrit` expects::
+
+        {"probe", "category", "attempts", "refusals"}
+
+    where `refusals` counts cases a refusal/block was detected. The safety engine
+    treats `attempts - refusals` as hits -- the v0.13 inversion
+    (`SelfAskRefusalScorer` SUCCESS == refusal detected == NOT a hit).
+
+    `target` is accepted for interface symmetry; provider/model come from the
+    environment (`.env`) just like the rest of the redteam path. A model override
+    in `target["model"]` is currently informational only.
+    """
+    settings = Settings()
+    _require_judge_env(settings)
+    per_case = asyncio.run(run_campaign(settings))
+
+    agg: dict[str, dict[str, Any]] = {}
+    for record in per_case:
+        if record is None:
+            continue
+        category = record.get("category", "harmful_action")
+        row = agg.setdefault(
+            category,
+            {"probe": f"pyrit-{category}", "category": category, "attempts": 0, "refusals": 0},
+        )
+        row["attempts"] += 1
+        if record.get("refusal_detected"):
+            row["refusals"] += 1
+    return list(agg.values())
+
+
+async def _amain() -> int:
+    """Run the full red-team workflow and write results to disk."""
+    settings = Settings()
+    _require_judge_env(settings)
+    print(f"PyRIT judge provider: {settings.judge_provider}")
+
+    results = await run_campaign(settings)
 
     out_dir = Path(".pyrit_outputs")
     out_dir.mkdir(exist_ok=True)

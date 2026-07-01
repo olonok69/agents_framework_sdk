@@ -10,6 +10,9 @@ build/
 uv.lock.bak
 .eval_outputs/
 .pyrit_outputs/
+.safety_outputs/
+# Safety & Trust engine artifacts + garak sidecar reports
+runs/
 
 # OS / editor
 .DS_Store
