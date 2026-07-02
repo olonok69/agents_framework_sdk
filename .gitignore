@@ -21,3 +21,8 @@ CLAUDE.md
 microsoft_agent_framework_app/uv.lock
 adk_financial_mcp_server/server/uv.lock
 *.pdf
+
+# Local assistant/editor and generated logs
+.claude/
+microsoft_agent_framework_app/garak.log
+microsoft_agent_framework_app/docs/presentation_video_intro.md
